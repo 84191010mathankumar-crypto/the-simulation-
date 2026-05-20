@@ -17,10 +17,13 @@ const MATERIALS = {
 }
 
 function meshMaterial(path) {
+  // Real KR210 colour scheme (matches kuka.com product photography):
+  //   base foot   →  black / charcoal
+  //   the entire arm (links 1–5 and most of 6) →  KUKA orange
+  //   wrist end / flange tip  →  black (rendered as the gripper mount disc)
   const file = path.split('/').pop().replace(/\.stl$/i, '').toLowerCase()
-  if (file === 'base_link')                                          return MATERIALS.charcoal()
-  if (file === 'link_4' || file === 'link_5' || file === 'link_6')   return MATERIALS.anthracite()
-  return MATERIALS.orange()   // link_1, link_2, link_3
+  if (file === 'base_link') return MATERIALS.charcoal()
+  return MATERIALS.orange()  // everything else: link_1..link_6
 }
 
 /* urdf-loader (v0.12) does `obj.material = defaultMaterial` after the user's
