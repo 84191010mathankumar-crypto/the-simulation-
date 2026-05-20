@@ -52,16 +52,16 @@ export default function SceneView() {
         shadows
         gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
         onCreated={({ gl }) => {
-          gl.toneMappingExposure = 0.85
+          gl.toneMappingExposure = 0.65
           gl.shadowMap.type = THREE.PCFSoftShadowMap
         }}
       >
         {/* Lighting — bright key + soft fill */}
-        <ambientLight intensity={0.35} />
-        <hemisphereLight args={['#ffffff', '#dde4ef', 0.45]} />
+        <ambientLight intensity={0.22} />
+        <hemisphereLight args={['#ffffff', '#dde4ef', 0.28]} />
         <directionalLight
           position={[6, 9, 5]}
-          intensity={1.1}
+          intensity={0.7}
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0001}
@@ -73,10 +73,10 @@ export default function SceneView() {
           shadow-camera-top={6}
           shadow-camera-bottom={-2}
         />
-        <pointLight position={[-3, 4, -2]} intensity={0.35} color="#ffe9c8" />
+        <pointLight position={[-3, 4, -2]} intensity={0.20} color="#ffe9c8" />
 
         {/* Studio environment for nice reflections on orange metal */}
-        <Environment preset="studio" background={false} environmentIntensity={0.7} />
+        <Environment preset="studio" background={false} environmentIntensity={0.45} />
 
         {/* Floor grid — light, subtle */}
         <Grid
