@@ -63,7 +63,8 @@ export default function RobotArm() {
 
         // URDF is ROS-convention (Z-up); Three.js scene is Y-up.
         // Rotate -90° about X so the base sits flat on the ground plane.
-        robot.position.set(0, 0, 0)
+        // Raise slightly so the base mounts on top of the pedestal plate.
+        robot.position.set(0, 0.05, 0)
         robot.rotation.set(-Math.PI / 2, 0, 0)
 
         scene.add(robot)

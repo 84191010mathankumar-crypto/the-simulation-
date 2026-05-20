@@ -15,7 +15,7 @@ function JointBar({ name, value }) {
     <div className="joint-row">
       <span className="joint-name">{name.replace('joint_', 'A')}</span>
       <div className="joint-track">
-        <div className="joint-fill" style={{ width: `${pct}%`, background: isNearLimit ? 'var(--red)' : 'var(--accent2)' }} />
+        <div className="joint-fill" style={{ width: `${pct}%`, background: isNearLimit ? 'var(--red)' : 'var(--accent-2)' }} />
         <div className="joint-zero" style={{ left: `${limitPct}%` }} />
       </div>
       <span className={`joint-val ${isNearLimit ? 'warn' : ''}`}>
@@ -107,9 +107,15 @@ export default function ControlPanel() {
     <aside className="control-panel">
       {/* Header */}
       <div className="panel-header">
-        <span className="panel-title">KUKA KR210 R2700-2</span>
-        <span className={`status-dot ${robotLoaded ? 'online' : 'offline'}`} />
-        <span className="status-label">{robotLoaded ? 'READY' : 'LOADING…'}</span>
+        <div className="panel-logo">R</div>
+        <div className="panel-title-wrap">
+          <span className="panel-title">KUKA KR210 R2700-2</span>
+          <span className="panel-subtitle">Pick &amp; place demo · 6-DOF</span>
+        </div>
+        <span className={`status-pill ${robotLoaded ? '' : 'offline'}`}>
+          <span className="status-dot" />
+          {robotLoaded ? 'Ready' : 'Loading'}
+        </span>
       </div>
 
       {/* Objects */}
@@ -118,7 +124,7 @@ export default function ControlPanel() {
         <ObjectCard
           label="START"
           obj={startObject}
-          color="#f0a500"
+          color="#ff6000"
           isSelected={selectedObject === 'start'}
           onSelect={() => setSelectedObject('start')}
           mode={transformMode}
@@ -127,7 +133,7 @@ export default function ControlPanel() {
         <ObjectCard
           label="END"
           obj={endObject}
-          color="#3b82f6"
+          color="#3b6fff"
           isSelected={selectedObject === 'end'}
           onSelect={() => setSelectedObject('end')}
           mode={transformMode}
