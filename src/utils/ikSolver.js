@@ -8,7 +8,7 @@
  * and provides a clean async interface for the animation system.
  */
 import * as THREE from 'three'
-import { JOINT_LIMITS, JOINT_NAMES } from '../store/useStore'
+import { JOINT_LIMITS, JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
 
 // ─── Clamp helper ─────────────────────────────────────────────────────────
 export function clampJoint(name, value) {
@@ -83,77 +83,125 @@ export function computeGrabPose(objectPos, objectEuler, grabVecLocal, approachDi
   return { position: approachPos, quaternion: q }
 }
 
-// ─── CCD IK solver (fallback, no external lib needed) ─────────────────────
+// ─── CCD IK solver ────────────────────────────────────────────────────────
 /**
- * Simple Cyclic Coordinate Descent IK.
- * Iteratively adjusts each joint from tip to base.
+ * Cyclic Coordinate Descent IK with multi-restart.
  *
- * Returns solved joint angles or null if out of reach.
+ * Each restart begins from a perturbed seed so the solver can escape local
+ * minima. Returns the best solution found, or null if unreachable.
  */
-export function solveCCDIK(robot, targetPos, targetQuat, maxIter = 40, tolerance = 0.005) {
+export function solveCCDIK(robot, targetPos, targetQuat, maxIter = 120, tolerance = 0.005) {
   if (!robot) return null
+
+  // Validate target
+  if (!isFinite(targetPos.x) || !isFinite(targetPos.y) || !isFinite(targetPos.z)) {
+    console.warn('solveCCDIK: invalid targetPos', targetPos)
+    return null
+  }
 
   const joints = JOINT_NAMES.map((name) => robot.joints[name]).filter(Boolean)
   if (joints.length === 0) return null
 
-  // Work on a copy
-  const startAngles = readAnglesFromRobot(robot)
+  const savedAngles = readAnglesFromRobot(robot)
 
+  // Quick reachability check: is target within arm radius?
+  const dist2D = Math.sqrt(targetPos.x ** 2 + targetPos.z ** 2)
+  if (dist2D > 2.8 || targetPos.y < -0.8 || targetPos.y > 2.6) {
+    console.warn('solveCCDIK: target likely out of reach', targetPos)
+    // still try — don't abort early
+  }
+
+  let bestAngles = null
+  let bestDist   = Infinity
+
+  // Multiple restart seeds: current pose, home, and two perturbed variants
+  const seeds = [
+    savedAngles,
+    { ...HOME_ANGLES },
+    { ...HOME_ANGLES, joint_1: -Math.PI / 4, joint_2: -1.2, joint_3: 1.8 },
+    { ...HOME_ANGLES, joint_1:  Math.PI / 4, joint_2: -1.2, joint_3: 1.8 },
+  ]
+
+  for (const seed of seeds) {
+    applyAnglesToRobot(robot, seed)
+    const result = _runCCD(robot, joints, targetPos, maxIter, tolerance)
+    const efPose = getEndEffectorPose(robot)
+    if (!efPose) continue
+    const d = efPose.position.distanceTo(targetPos)
+    if (d < bestDist) {
+      bestDist   = d
+      bestAngles = readAnglesFromRobot(robot)
+    }
+    if (d <= tolerance) break   // good enough, stop early
+  }
+
+  // Restore saved angles (animation will interpolate to solution)
+  applyAnglesToRobot(robot, savedAngles)
+
+  if (bestDist > tolerance * 20) {
+    // Too far — give up
+    return null
+  }
+  return bestAngles
+}
+
+function _runCCD(robot, joints, targetPos, maxIter, tolerance) {
   for (let iter = 0; iter < maxIter; iter++) {
-    // Outer loop: iterate joints from tip (joint_6) to base (joint_1)
+    let moved = false
+
+    // Tip-to-base sweep
     for (let j = joints.length - 1; j >= 0; j--) {
       const joint = joints[j]
       const jName = JOINT_NAMES[j]
 
-      // Get current end-effector position
       const efPose = getEndEffectorPose(robot)
       if (!efPose) continue
+
       const ee = efPose.position
+      if (ee.distanceTo(targetPos) < tolerance) return true
 
-      // Check convergence
-      if (ee.distanceTo(targetPos) < tolerance) {
-        return readAnglesFromRobot(robot)
+      // Joint pivot in world space
+      const pivot = new THREE.Vector3()
+      joint.getWorldPosition(pivot)
+
+      // Joint rotation axis in world space (all KUKA joints rotate about local Z)
+      const jointQuat = new THREE.Quaternion()
+      joint.getWorldQuaternion(jointQuat)
+      const axisWorld = new THREE.Vector3(0, 0, 1).applyQuaternion(jointQuat)
+
+      // Project EE and target onto the plane perpendicular to the joint axis
+      const toEE  = ee.clone().sub(pivot)
+      const toTgt = targetPos.clone().sub(pivot)
+
+      // Remove axis component (project onto rotation plane)
+      toEE.addScaledVector(axisWorld, -toEE.dot(axisWorld))
+      toTgt.addScaledVector(axisWorld, -toTgt.dot(axisWorld))
+
+      const lenEE  = toEE.length()
+      const lenTgt = toTgt.length()
+      if (lenEE < 1e-6 || lenTgt < 1e-6) continue
+
+      toEE.divideScalar(lenEE)
+      toTgt.divideScalar(lenTgt)
+
+      // Signed angle from toEE → toTgt around axisWorld
+      const cross = toEE.clone().cross(toTgt)
+      const dot   = Math.max(-1, Math.min(1, toEE.dot(toTgt)))
+      let   delta = Math.acos(dot)
+      if (cross.dot(axisWorld) < 0) delta = -delta
+
+      // Clamp and apply
+      const prev     = joint.angle
+      const next     = clampJoint(jName, prev + delta)
+      if (Math.abs(next - prev) > 1e-6) {
+        robot.setJointValue(jName, next)
+        moved = true
       }
-
-      // Vector from joint pivot to EE and to target
-      const pivotWorld = new THREE.Vector3()
-      joint.getWorldPosition(pivotWorld)
-
-      const toEE     = ee.clone().sub(pivotWorld).normalize()
-      const toTarget = targetPos.clone().sub(pivotWorld).normalize()
-
-      // Rotation axis is the joint's local z in world space
-      const jointZWorld = new THREE.Vector3(0, 0, 1)
-        .applyQuaternion(joint.getWorldQuaternion(new THREE.Quaternion()))
-        .normalize()
-
-      // Signed angle between toEE and toTarget around jointZ
-      const cross = toEE.clone().cross(toTarget)
-      const dot   = Math.max(-1, Math.min(1, toEE.dot(toTarget)))
-      let angle   = Math.acos(dot)
-      if (cross.dot(jointZWorld) < 0) angle = -angle
-
-      // Apply delta
-      const newAngle = clampJoint(jName, joint.angle + angle)
-      robot.setJointValue(jName, newAngle)
     }
-  }
 
-  // Final convergence check
-  const efPose = getEndEffectorPose(robot)
-  if (!efPose) {
-    applyAnglesToRobot(robot, startAngles)
-    return null
+    if (!moved) break  // converged — no joint moved this sweep
   }
-
-  const dist = efPose.position.distanceTo(targetPos)
-  if (dist > tolerance * 10) {
-    // Failed — restore original
-    applyAnglesToRobot(robot, startAngles)
-    return null
-  }
-
-  return readAnglesFromRobot(robot)
+  return false
 }
 
 // ─── Solve IK (CCD-based, respects joint limits) ──────────────────────────

@@ -98,29 +98,30 @@ function _solveSegment(store, target, currentAngles) {
   if (!robotRef) return
 
   const obj = target === 'start' ? startObject : endObject
-  const { position: grabPos, quaternion: grabQuat } =
+
+  // computeGrabPose returns { position: THREE.Vector3, quaternion: THREE.Quaternion }
+  const { position: targetVec, quaternion: grabQuat } =
     computeGrabPose(obj.position, obj.rotation, obj.grabVector, 0.0)
 
-  const targetVec = new THREE.Vector3(...grabPos)
-
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
-    X: grabPos[0], Y: grabPos[1], Z: grabPos[2],
+    X: targetVec.x.toFixed(3),
+    Y: targetVec.y.toFixed(3),
+    Z: targetVec.z.toFixed(3),
   })
 
   // Solve IK — mutates robot joints during solving, then restores on failure
-  const solved = solveCCDIK(robotRef, targetVec, grabQuat, 80, 0.006)
+  const solved = solveCCDIK(robotRef, targetVec, grabQuat, 120, 0.005)
 
   if (solved) {
     const clamped = clampAllJoints(solved)
-    // Restore current angles — animation will interpolate
+    // Restore current angles — animation will interpolate from here
     applyAnglesToRobot(robotRef, currentAngles)
     addLog('ok', `IK converged for ${target.toUpperCase()}`, _logAngles(clamped))
     useStore.setState({ fromAngles: currentAngles, toAngles: clamped })
   } else {
-    addLog('warn', `IK did not fully converge for ${target} — best effort`)
-    const best = readAnglesFromRobot(robotRef)
+    addLog('warn', `IK did not converge for ${target} — target may be out of reach`)
     applyAnglesToRobot(robotRef, currentAngles)
-    useStore.setState({ fromAngles: currentAngles, toAngles: clampAllJoints(best) })
+    useStore.setState({ fromAngles: currentAngles, toAngles: currentAngles })
   }
 }
 
