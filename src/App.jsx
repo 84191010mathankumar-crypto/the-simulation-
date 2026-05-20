@@ -1,18 +1,19 @@
 import React from 'react'
-import { RobotStoreProvider } from './lib'
-import ControlPanel from './components/ControlPanel'
-import SceneView from './components/SceneView'
+import WarehouseApp from './warehouse/WarehouseApp.jsx'
 import './App.css'
 
+/**
+ * Demo entry — boots the multi-robot warehouse scene.
+ *
+ * The original single-arm dev panel still lives at:
+ *   src/components/ControlPanel.jsx
+ *   src/components/SceneView.jsx
+ * To switch back, replace the import below with:
+ *   import { RobotStoreProvider } from './lib'
+ *   import ControlPanel from './components/ControlPanel'
+ *   import SceneView from './components/SceneView'
+ *   …and render <RobotStoreProvider><ControlPanel /><SceneView /></RobotStoreProvider>.
+ */
 export default function App() {
-  // One robot, one store.  For a multi-robot demo, create stores explicitly
-  // and wrap each robot's components in its own <RobotStoreProvider store={...}>.
-  return (
-    <RobotStoreProvider>
-      <div className="app-layout">
-        <ControlPanel />
-        <SceneView />
-      </div>
-    </RobotStoreProvider>
-  )
+  return <WarehouseApp />
 }

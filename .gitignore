@@ -27,3 +27,6 @@ Thumbs.db
 
 # Claude local settings (personal overrides)
 .claude/settings.local.json
+
+# Smoke-test screenshots (regenerated on every run)
+scripts/smoke-*.png

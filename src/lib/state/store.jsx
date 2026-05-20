@@ -58,6 +58,9 @@ export function createRobotStore() {
     // ── Mobile platform ─────────────────────────────────────────────
     mobileMode: false,
     platformPose: { position: [0, 0, 0], rotation: [0, 0, 0] },
+    // Home pose the robot returns to after dropping an object.  Multi-robot
+    // scenes set this per-store so each AGV parks at its own dock.
+    platformHome: { position: [0, 0, 0], rotation: [0, 0, 0] },
     platformGroupRef: null,
     fromPlatform: null,
     toPlatform: null,

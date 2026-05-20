@@ -13,13 +13,31 @@ import {
   clampAllJoints,
 } from '../ik/ikSolver'
 
-// Seconds per motion segment
+// Seconds per motion segment.  Drive segments (moving_to_start, moving_to_end,
+// returning) scale with distance in mobile mode so a 15 m warehouse drive
+// doesn't finish in 2 s; see _durationFor below.
 const SPEED = {
   moving_to_start: 2.0,
   grabbing:        0.5,
   moving_to_end:   2.0,
   releasing:       0.5,
   returning:       1.6,
+}
+
+// Mobile-mode drive speed for the AGV chassis (m/s).  Used to derive the
+// per-segment duration when the platform is travelling further than a few
+// metres — otherwise the constant SPEED above produces unrealistic warp.
+const DRIVE_SPEED = 1.6   // m/s
+
+function _durationFor(animState, fromPlatform, toPlatform, mobileMode) {
+  const base = SPEED[animState] || 1.0
+  if (!mobileMode || !fromPlatform || !toPlatform) return base
+  if (animState !== 'moving_to_start' && animState !== 'moving_to_end' && animState !== 'returning') return base
+  const dx = toPlatform.position[0] - fromPlatform.position[0]
+  const dz = toPlatform.position[2] - fromPlatform.position[2]
+  const d  = Math.hypot(dx, dz)
+  if (d < 0.5) return base
+  return Math.max(base, d / DRIVE_SPEED)
 }
 
 const SEQUENCE = {
@@ -30,7 +48,7 @@ const SEQUENCE = {
   returning:       'idle',
 }
 
-const HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
+const DEFAULT_HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
 
 // Distance from the platform's base centre to the target object — chosen so
 // the arm can reach the target naturally without being either cramped or
@@ -38,14 +56,22 @@ const HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
 const PLATFORM_STANDOFF = 1.1
 
 /* Park the platform STANDOFF metres back from the target along the line
- * from world origin → target.  Platform rotation stays at zero — the arm's
- * joint_1 will swing to face the target via IK. */
-function computePlatformPoseFor(targetWorldPos) {
+ * from the robot's *current* platform position to the target — so multiple
+ * robots starting at different home positions each approach naturally from
+ * their own side, instead of all converging on the world origin.
+ *
+ * Platform rotation stays at zero — the arm's joint_1 swings to face the
+ * target via IK. */
+function computePlatformPoseFor(targetWorldPos, currentPose) {
   const tx = targetWorldPos[0]
   const tz = targetWorldPos[2]
-  const dist = Math.hypot(tx, tz) || 1e-6
-  const px = tx - (tx / dist) * PLATFORM_STANDOFF
-  const pz = tz - (tz / dist) * PLATFORM_STANDOFF
+  const cx = currentPose?.position?.[0] ?? 0
+  const cz = currentPose?.position?.[2] ?? 0
+  const dx = tx - cx
+  const dz = tz - cz
+  const dist = Math.hypot(dx, dz) || 1e-6
+  const px = tx - (dx / dist) * PLATFORM_STANDOFF
+  const pz = tz - (dz / dist) * PLATFORM_STANDOFF
   return { position: [px, 0, pz], rotation: [0, 0, 0] }
 }
 
@@ -92,7 +118,7 @@ export default function AnimationController() {
         // In mobile mode the platform also follows: snap it to its preferred
         // parked pose for this target before solving IK.
         if (mobileMode) {
-          const platPose = computePlatformPoseFor(obj.position)
+          const platPose = computePlatformPoseFor(obj.position, state.platformPose)
           storeApi.setState({ platformPose: platPose })
           _setGroupPose(state.platformGroupRef, platPose)
         }
@@ -128,9 +154,10 @@ export default function AnimationController() {
         _solveSegment(storeApi, state, 'end',   currentAngles, currentPlatform)
       } else if (animState === 'returning') {
         const homeAngles = clampAllJoints({ ...HOME_ANGLES })
+        const homePlatform = state.platformHome || DEFAULT_HOME_PLATFORM
         storeApi.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
-          fromPlatform: currentPlatform, toPlatform: { ...HOME_PLATFORM },
+          fromPlatform: currentPlatform, toPlatform: { ...homePlatform },
         })
         state.addLog('info', 'Returning to HOME…')
       } else {
@@ -144,7 +171,7 @@ export default function AnimationController() {
     }
 
     // ── Advance segment ────────────────────────────────────────────────────
-    const duration = SPEED[animState] || 1.0
+    const duration = _durationFor(animState, fromPlatform, toPlatform, mobileMode)
     progressRef.current = Math.min(1, progressRef.current + delta / duration)
     const t = easeInOutCubic(progressRef.current)
 
@@ -181,8 +208,9 @@ function _solveSegment(storeApi, state, target, currentAngles, currentPlatform) 
   const obj = target === 'start' ? startObject : endObject
   const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
 
-  // Pick where the platform should park for this target
-  const targetPlatform = mobileMode ? computePlatformPoseFor(obj.position) : currentPlatform
+  // Pick where the platform should park for this target — approach from the
+  // robot's current position so multi-robot scenes don't all converge on origin.
+  const targetPlatform = mobileMode ? computePlatformPoseFor(obj.position, currentPlatform) : currentPlatform
 
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
     X: faceCenter.x.toFixed(3),

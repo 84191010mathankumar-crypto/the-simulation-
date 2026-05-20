@@ -62,3 +62,10 @@ export {
   lerpAngles, easeInOutCubic,
   PINCH_Z,
 } from './ik/ikSolver.js'
+
+// Multi-robot coordinator primitives (pure functions, no scene dependency)
+export {
+  dist2D, pointSegmentDistance, segmentSegmentDistance,
+  assignNearestPending,
+  pathConflicts, pathClearOfRobots,
+} from './coordinator/index.js'

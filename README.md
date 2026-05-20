@@ -1,19 +1,22 @@
 # roboclaw
 
-A small **React + Three.js** library that puts a real, motion-accurate 6-axis robot arm into your browser.  Out of the box it gives you:
+A **React + Three.js** library + demo for simulating a 6-axis robot arm doing pick-and-place tasks, alone or in a coordinated fleet.
+
+What you get out of the box:
 
 - A KUKA **KR210 R2700-2** loaded from URDF, with proper colours and a parallel-jaw gripper.
 - An **inverse-kinematics solver** so you can say "go pick that thing up" instead of dialling six joint angles by hand.
 - A **pick-and-place state machine** that animates the move-grab-move-release-return sequence.
-- Optional **mobile platform** mode — the robot rides on an AGV that drives itself to within reach of the target.
-- Draggable **start / end pose targets** with a 3D gizmo.
+- A **mobile-platform** mode — the robot rides on an AGV that drives itself to within reach of the target.
+- A **multi-robot coordinator** that auto-assigns scripted tasks to a fleet, with path-conflict avoidance.
+- A polished **warehouse demo page** wiring all of the above together: 20 × 20 m room, slider for robot count, editable task list.
 
-The repo contains both:
+This repo contains both:
 
 1. **The library** under [src/lib/](src/lib/) — the parts you reuse in any app.
-2. **A demo app** at the repo root — a Vite-powered single-page app that shows the library in action.  The demo is also a reference implementation: copy it as the starting point for your own scene.
+2. **A warehouse demo app** under [src/warehouse/](src/warehouse/) — a Vite-powered single-page app that shows the library in action.  Open it, click Run, watch robots negotiate around each other.
 
-> **Where this is going** — the goal is a larger app where **multiple robots roam a shared space and rebuild it by moving objects from A to B**.  This repo will host that app too; the boundary between *library* and *the bigger project* is the [src/lib/](src/lib/) folder.
+> **Where this is going** — the goal is a larger app where **multiple robots roam a shared space and rebuild it by moving objects from A to B**.  The warehouse demo is the first cut.
 
 ---
 
@@ -28,18 +31,22 @@ npm install      # downloads everything the project needs (one-time, takes a min
 npm run dev      # starts a local server and prints a URL
 ```
 
-The terminal will show something like `Local: http://localhost:5173/` — open that link in your browser.  You should see the orange robot on a circular pedestal, with two coloured boxes (orange = **start**, blue = **end**).
+The terminal will show something like `Local: http://localhost:5173/` — open that link in your browser.  You'll see a 20 × 20 m warehouse with KUKA arms parked at the corners and six coloured crates scattered around the floor.
 
 ### What to try
 
 | Action | What happens |
 | --- | --- |
-| Drag the colored gizmo on a box | The box moves.  Toggle **Follow start / Follow end** and the arm will live-track it. |
-| Click **Run** | Robot moves to start → grabs → moves to end → releases → returns home. |
-| Tick **Mobile platform** | Robot now sits on an AGV chassis.  It drives itself near each target before reaching. |
-| Click **Home** | Arm snaps back to the home pose. |
+| Drag the **Active robots** slider | Change the fleet size from 1 to 6 robots before pressing Run. |
+| Click **Run** | The coordinator assigns each robot the nearest unclaimed crate, drives there, picks it up, drives to the target zone (the dim outline), drops it. |
+| Watch the side panel | Live counters (pending / active / done), per-robot task assignments, per-task progress. |
+| Click **Stop** then **Reset** | Pauses or resets the demo. |
 
-If something looks wrong — robot is white, meshes missing — you almost certainly haven't run `npm install` yet, or you're opening a stale tab.  Stop the server (`Ctrl+C` in the terminal), run `npm install`, then `npm run dev` again.
+**Want to change the tasks?** Edit [src/warehouse/tasks.js](src/warehouse/tasks.js) — each entry is `{ id, label, from: [x, z], to: [x, z], size, color }`.  Add, remove, or move boxes around; Vite hot-reloads.
+
+**Where's the original single-arm demo?**  The components live under [src/components/](src/components/) — to switch back, edit [src/App.jsx](src/App.jsx) per the comment in that file.
+
+If something looks wrong — robots white, meshes missing — you probably haven't run `npm install` yet, or you're opening a stale tab.  Stop the server (`Ctrl+C` in the terminal), run `npm install`, then `npm run dev` again.
 
 ---
 
@@ -58,25 +65,41 @@ roboclaw/
 │
 └── src/
     ├── main.jsx           ← demo app bootstrap
-    ├── App.jsx            ← demo app shell (ControlPanel + SceneView)
-    ├── components/        ← demo-only UI (control panel, scene wrapper)
+    ├── App.jsx            ← demo entry — currently renders WarehouseApp
+    │
+    ├── components/        ← original single-arm demo (kept as reference)
     │   ├── ControlPanel.jsx
     │   └── SceneView.jsx
     │
+    ├── warehouse/         ← THE WAREHOUSE DEMO ← multi-robot scene
+    │   ├── WarehouseApp.jsx         ← top-level: panel + scene + coordinator
+    │   ├── WarehouseScene.jsx       ← 20×20 m room, lighting, robots, boxes
+    │   ├── WarehousePanel.jsx       ← side panel (slider, run/reset, task list)
+    │   ├── tasks.js                 ← edit me: spawned crates + targets
+    │   ├── useWarehouseCoordinator.js ← runtime: assigns + schedules + avoids
+    │   ├── RobotInstance.jsx        ← one robot, own store, AGV-mounted
+    │   ├── Platform.jsx             ← AGV chassis with per-robot accent disc
+    │   ├── Room.jsx                 ← floor, walls, drop-zone outlines
+    │   └── TaskBox.jsx              ← box that follows its task's state
+    │
     └── lib/               ← THE LIBRARY ← reusable parts live here
-        ├── index.js          ← public API barrel — `import { ... } from '...lib'`
+        ├── index.js              ← public API barrel — `import { ... } from '...lib'`
         ├── components/
         │   ├── RobotArm.jsx
         │   ├── AnimationController.jsx
         │   ├── WorkObject.jsx
         │   └── WorkingEnvelope.jsx
         ├── state/
-        │   ├── constants.js  ← joint names / limits / home pose / working area
-        │   ├── store.jsx     ← createRobotStore factory + Context + hooks
+        │   ├── constants.js      ← joint names / limits / home pose / working area
+        │   ├── store.jsx         ← createRobotStore factory + Context + hooks
         │   └── store.test.js
-        └── ik/
-            ├── ikSolver.js   ← CCD inverse kinematics + grab-pose math
-            └── ikSolver.test.js
+        ├── ik/
+        │   ├── ikSolver.js       ← CCD inverse kinematics + grab-pose math
+        │   └── ikSolver.test.js
+        └── coordinator/          ← multi-robot primitives (pure functions)
+            ├── geometry.js       ← 2D distance / segment-segment helpers
+            ├── assign.js         ← greedy nearest-task assignment
+            └── avoidance.js      ← path-conflict + parked-robot checks
 ```
 
 **Rule of thumb:** if it's in [src/lib/](src/lib/), it's part of the library and stable.  If it's anywhere else under `src/`, it's demo-app glue that you should *not* depend on from a bigger project — copy it instead.
@@ -262,7 +285,31 @@ The store is built with the `subscribeWithSelector` middleware, so `store.subscr
 | `clampJoint` / `clampAllJoints` | Snap angles into the URDF limits. |
 | `lerpAngles` / `easeInOutCubic` | Helpers for smooth interpolation. |
 
+### Multi-robot coordinator primitives
+
+| Name | What it is |
+| --- | --- |
+| `assignNearestPending(idleRobots, pendingTasks)` | Greedy nearest-pickup assignment; never gives two robots the same task. |
+| `pathConflicts(start, end, reservations, safetyDistance)` | Returns true if a planned segment passes within `safetyDistance` of any reserved segment. |
+| `pathClearOfRobots(start, end, parkedPositions, safetyDistance)` | Like above but for stationary robots (zero-length segments). |
+| `dist2D`, `pointSegmentDistance`, `segmentSegmentDistance` | The geometric primitives both of the above are built from. |
+
 ---
+
+## 5a. Warehouse demo internals
+
+The demo is wired in roughly four layers:
+
+1. **Tasks** ([tasks.js](src/warehouse/tasks.js)) — a plain JS array of `{ from, to, size, color, label }`.  Edit this file to add or move work.
+2. **Robots** ([RobotInstance.jsx](src/warehouse/RobotInstance.jsx)) — each robot is its own `<RobotStoreProvider store={...}>` containing a `<RobotArm>` + `<AnimationController>` + AGV chassis.  Stores are stable across slider changes so a robot keeps its identity if you scale the fleet up and down.
+3. **Coordinator** ([useWarehouseCoordinator.js](src/warehouse/useWarehouseCoordinator.js)) — a polled state machine that:
+   - notices when a robot's `animState` is `idle` and gives it the closest pending task (greedy assignment via `assignNearestPending`)
+   - reserves the segment the robot is *currently driving*, and refuses to start a new task whose drive-to-pickup or pickup-to-dropoff legs cross a reservation within `SAFETY_DISTANCE` (1.4 m today)
+   - writes `startObject` / `endObject` / `setAnimState('moving_to_start')` into the robot's store to kick off the existing pick-and-place pipeline
+   - releases reservations when the robot returns to idle, freeing those lanes for others
+4. **Visuals** ([TaskBox.jsx](src/warehouse/TaskBox.jsx), [Room.jsx](src/warehouse/Room.jsx)) — each box positions itself every frame: resting at `from` while pending, glued to the carrier robot's gripper while in transit, resting at `to` when done.
+
+**Limitations (honest list).**  Today the avoidance is geometric only — it doesn't reason about *time* (a robot that's about to finish its leg is treated the same as one that just started).  This is fine for the current demo because legs are short and re-checked every 150 ms, but if you push to 6+ robots crowding the centre of the floor you can see brief stalls.  Better schemes (time-windowed reservations, CBS, velocity obstacles) plug into [src/lib/coordinator/avoidance.js](src/lib/coordinator/avoidance.js).
 
 ## 6. Architecture notes
 
@@ -278,7 +325,22 @@ npm test            # one-shot run (CI / pre-push)
 npm run test:watch  # interactive watcher during development
 ```
 
-Tests cover the store factory (independence between robots, action behaviour, `subscribeWithSelector` semantics) and the pure IK helpers (`clampJoint`, `lerpAngles`, `easeInOutCubic`, `computeGrabPose`).  37 tests, ~700 ms.
+Tests cover:
+
+- the store factory (independence between robots, action behaviour, `subscribeWithSelector` semantics)
+- the pure IK helpers (`clampJoint`, `lerpAngles`, `easeInOutCubic`, `computeGrabPose`)
+- the coordinator primitives (`assignNearestPending`, `pathConflicts`, `pathClearOfRobots`, segment-segment math)
+
+67 tests, ~300 ms.
+
+There is also a **headless browser smoke test** that exercises the warehouse demo end-to-end — boots the dev server, clicks Run, watches the counters tick from 0 to 6 done, and saves screenshots to `scripts/`:
+
+```bash
+# In one terminal:
+npm run dev
+# In another, once the server is up:
+PORT=<port-vite-printed> node scripts/smoke.mjs
+```
 
 What is **not** tested:
 - The full URDF load path (`urdf-loader` needs a DOM + network — covered by the dev-server smoke test).
@@ -291,11 +353,13 @@ Add tests next to the file they exercise, named `*.test.js` — Vitest picks the
 ## 7. Roadmap
 
 - [x] **Multi-robot support** — factory + Context done.  See "Multiple robots in the same scene" above.
-- [ ] **Spatial state on refs, not in the store** — joint angles + 3D objects live as plain Three.js mutables; the store keeps only UI-facing state (animState, logs, follow mode).  Cuts re-renders in the hot path.
+- [x] **Warehouse-scale demo** — 20×20 m room, scripted tasks, runtime coordinator, slider-controlled fleet.
+- [ ] **Spatial state on refs, not in the store** — joint angles + 3D objects live as plain Three.js mutables; the store keeps only UI-facing state (animState, logs, follow mode).  Cuts re-renders in the hot path.  *(Started but deferred to keep the warehouse demo focused — see [src/lib/state/store.jsx](src/lib/state/store.jsx).)*
+- [ ] **Time-windowed reservations** in the avoidance layer — today's geometric check is correct but conservative.  CBS or velocity obstacles slot into [src/lib/coordinator/avoidance.js](src/lib/coordinator/avoidance.js).
 - [ ] **Higher-level scene primitives** — a `<RobotOnPlatform>` wrapper extracted from the demo's `RobotBase`.
 - [ ] **Bundled lib build** (`tsup` or `vite build --lib`) so the package is consumable outside Vite.
 - [ ] **Programmatic task API** — `runPickAndPlace({ from, to })` returning a Promise, instead of poking the animState string.
-- [ ] **Collision checks** between arm/platform/world.
+- [ ] **Collision checks** between arm/platform/world (today we coordinate AGV paths, not arm sweep volumes).
 
 ---
 
