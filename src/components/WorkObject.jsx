@@ -1,5 +1,5 @@
-import React, { useRef, useCallback, useMemo } from 'react'
-import { TransformControls, Edges } from '@react-three/drei'
+import React, { useMemo, useRef, useCallback } from 'react'
+import { PivotControls, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import useStore from '../store/useStore'
 
@@ -7,95 +7,92 @@ const BOX_SIZE = [0.15, 0.15, 0.15]
 export const BOX_HALF = BOX_SIZE[0] / 2
 
 /**
- * Renders a work object (start or end position) as a wireframe box with:
- * - TransformControls gizmo (translate or rotate)
- * - Grab direction arrow indicator
- * - Outline edges
+ * Renders a work object (start or end pose) with:
+ *  - Transparent edged box
+ *  - Grab arrow originating at the centre of the grab face
+ *  - drei <PivotControls> gumball — translate AND rotate in one widget
  */
 export default function WorkObject({ objectKey, color }) {
-  const meshRef = useRef()
+  const groupRef = useRef()
+  const lastMatrixRef = useRef(null)
 
   const {
     startObject, endObject,
     setStartObject, setEndObject,
-    selectedObject, setSelectedObject,
-    transformMode,
   } = useStore()
 
-  const isStart    = objectKey === 'start'
-  const obj        = isStart ? startObject : endObject
-  const setObj     = isStart ? setStartObject : setEndObject
-  const isSelected = selectedObject === objectKey
+  const isStart = objectKey === 'start'
+  const obj     = isStart ? startObject : endObject
+  const setObj  = isStart ? setStartObject : setEndObject
 
-  // Sync position/rotation back to store as user drags
-  const onTransformChange = useCallback(() => {
-    if (!meshRef.current) return
-    const p = meshRef.current.position
-    const r = meshRef.current.rotation
-    setObj({ position: [p.x, p.y, p.z], rotation: [r.x, r.y, r.z] })
+  // Build the initial matrix the gumball starts from (only first render).
+  const initialMatrix = useMemo(() => {
+    const m = new THREE.Matrix4()
+    const pos = new THREE.Vector3(...obj.position)
+    const eul = new THREE.Euler(obj.rotation[0], obj.rotation[1], obj.rotation[2], 'XYZ')
+    const q   = new THREE.Quaternion().setFromEuler(eul)
+    m.compose(pos, q, new THREE.Vector3(1, 1, 1))
+    return m
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // While dragging the gumball, write the new pose back into the store.
+  const onDrag = useCallback((world) => {
+    const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
+    const scl = new THREE.Vector3()
+    world.decompose(pos, quat, scl)
+    const eul = new THREE.Euler().setFromQuaternion(quat, 'XYZ')
+    setObj({
+      position: [pos.x, pos.y, pos.z],
+      rotation: [eul.x, eul.y, eul.z],
+    })
+    lastMatrixRef.current = world.clone()
   }, [setObj])
 
-  // Build arrow geometry for grab direction.
-  // The grab POINT is on the centre of one face of the box (offset from the
-  // box centre along the grab vector by half the box size). The arrow starts
-  // at that face centre and points outward — that's where the gripper docks.
-  const { arrowDir, arrowOrigin, arrowLength } = useMemo(() => {
+  // Arrow — origin sits on the face the grab vector points out of,
+  // pointing along that vector in world space.
+  const arrowHelper = useMemo(() => {
     const dirLocal = new THREE.Vector3(...obj.grabVector).normalize()
-    const rotM     = new THREE.Matrix4().makeRotationFromEuler(
+    const rotM = new THREE.Matrix4().makeRotationFromEuler(
       new THREE.Euler(obj.rotation[0], obj.rotation[1], obj.rotation[2], 'XYZ')
     )
     const dirWorld = dirLocal.clone().applyMatrix4(rotM)
     const origin   = new THREE.Vector3(...obj.position).addScaledVector(dirWorld, BOX_HALF)
-    return { arrowDir: dirWorld, arrowOrigin: origin, arrowLength: 0.18 }
-  }, [obj.position, obj.rotation, obj.grabVector])
-
-  // Stable ArrowHelper object — update in place when position/direction changes
-  const arrowHelper = useMemo(() => {
-    const ah = new THREE.ArrowHelper(arrowDir, arrowOrigin, arrowLength, color, 0.05, 0.03)
+    const ah = new THREE.ArrowHelper(dirWorld, origin, 0.20, color, 0.05, 0.03)
     ah.renderOrder = 999
     return ah
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // created once; updated imperatively below
-
-  // Keep arrow in sync with current obj state
-  useMemo(() => {
-    arrowHelper.setDirection(arrowDir)
-    arrowHelper.position.copy(arrowOrigin)
-    arrowHelper.setLength(arrowLength, 0.05, 0.03)
-  }, [arrowHelper, arrowDir, arrowOrigin, arrowLength])
+  }, [obj.position, obj.rotation, obj.grabVector, color])
 
   return (
-    <group>
-      {/* Transparent box with outlined edges */}
-      <mesh
-        ref={meshRef}
-        position={obj.position}
-        rotation={obj.rotation}
-        onClick={(e) => { e.stopPropagation(); setSelectedObject(objectKey) }}
-        castShadow
+    <>
+      <PivotControls
+        scale={120}                // pixel size (with fixed=true)
+        fixed
+        lineWidth={3}
+        depthTest={false}
+        anchor={[0, 0, 0]}
+        activeAxes={[true, true, true]}
+        annotations
+        annotationsClass="pivot-annot"
+        matrix={initialMatrix}
+        autoTransform
+        onDrag={onDrag}
       >
-        <boxGeometry args={BOX_SIZE} />
-        <meshStandardMaterial
-          color={color}
-          transparent
-          opacity={isSelected ? 0.18 : 0.08}
-          depthWrite={false}
-        />
-        <Edges color={color} threshold={5} lineWidth={isSelected ? 2.5 : 1.2} />
-      </mesh>
+        <mesh ref={groupRef} castShadow>
+          <boxGeometry args={BOX_SIZE} />
+          <meshStandardMaterial
+            color={color}
+            transparent
+            opacity={0.18}
+            depthWrite={false}
+          />
+          <Edges color={color} threshold={5} lineWidth={1.8} />
+        </mesh>
+      </PivotControls>
 
-      {/* Grab direction arrow */}
+      {/* Grab arrow lives outside PivotControls so we draw it from world coords */}
       <primitive object={arrowHelper} />
-
-      {/* TransformControls — only when this object is selected */}
-      {isSelected && meshRef.current && (
-        <TransformControls
-          object={meshRef.current}
-          mode={transformMode}
-          size={0.55}
-          onChange={onTransformChange}
-        />
-      )}
-    </group>
+    </>
   )
 }

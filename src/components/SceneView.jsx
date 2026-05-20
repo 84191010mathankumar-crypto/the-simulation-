@@ -139,12 +139,6 @@ export default function SceneView() {
         </GizmoHelper>
       </Canvas>
 
-      <div className="scene-hints">
-        <span><b>LMB</b>orbit</span>
-        <span><b>RMB</b>pan</span>
-        <span><b>Scroll</b>zoom</span>
-        <span><b>Click box</b>drag gizmo</span>
-      </div>
     </div>
   )
 }
