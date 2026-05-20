@@ -66,6 +66,11 @@ const useStore = create((set, get) => ({
   fromAngles: null,         // snapshot at start of anim segment
   toAngles: null,           // target angles for anim segment
 
+  // ── Follow mode ──────────────────────────────────────────────────
+  // Continuously solve IK to track a target as the user drags it.
+  // null | 'start' | 'end'
+  followTarget: null,
+
   // ── Log ──────────────────────────────────────────────────────────
   logs: [],
 
@@ -85,6 +90,7 @@ const useStore = create((set, get) => ({
   setTransformMode:  (v) => set({ transformMode: v }),
 
   setAnimState: (state) => set({ animState: state }),
+  setFollowTarget: (which) => set({ followTarget: which }),
   setAnimProgress: (p)  => set({ animProgress: p }),
   setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),
 

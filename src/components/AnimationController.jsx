@@ -37,14 +37,35 @@ const SEQUENCE = {
 export default function AnimationController() {
   const progressRef = useRef(0)
   const prevStateRef = useRef('idle')
+  const lastFollowKeyRef = useRef('')
 
   useFrame((_, delta) => {
     const store = useStore.getState()
-    const { animState, robotRef, fromAngles, toAngles } = store
+    const { animState, robotRef, fromAngles, toAngles,
+            followTarget, startObject, endObject } = store
+
+    // ── Follow mode: continuously solve IK for the chosen target ────────────
+    // Only active while no sequence is running. Re-solves only when the
+    // target's pose actually changes (the user is dragging the gumball).
+    if (animState === 'idle' && followTarget && robotRef) {
+      const obj = followTarget === 'start' ? startObject : endObject
+      const key = `${obj.position.join(',')}|${obj.rotation.join(',')}|${obj.grabVector.join(',')}`
+      if (key !== lastFollowKeyRef.current) {
+        lastFollowKeyRef.current = key
+        const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
+        const solved = solveCCDIK(robotRef, faceCenter, toolZ, 80, 0.006)
+        if (solved) {
+          applyAnglesToRobot(robotRef, solved)
+          useStore.setState({ jointAngles: { ...solved } })
+        }
+      }
+      return
+    }
 
     if (animState === 'idle') {
       prevStateRef.current = 'idle'
       progressRef.current  = 0
+      lastFollowKeyRef.current = ''
       return
     }
 

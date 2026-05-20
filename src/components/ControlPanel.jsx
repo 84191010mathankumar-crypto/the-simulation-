@@ -58,6 +58,7 @@ function LogEntry({ entry }) {
 export default function ControlPanel() {
   const {
     jointAngles, robotLoaded, animState, animProgress,
+    followTarget, setFollowTarget,
     addLog, clearLogs, logs,
     setAnimState, resetToHome,
   } = useStore()
@@ -67,12 +68,24 @@ export default function ControlPanel() {
 
   const handleRun = () => {
     if (!canRun) return
+    setFollowTarget(null)
     addLog('info', 'Moving to start position…')
     setAnimState('moving_to_start')
   }
   const handleHome = () => {
+    setFollowTarget(null)
     resetToHome()
     addLog('info', 'Returned to home')
+  }
+  const toggleFollow = (which) => {
+    if (isRunning) return
+    if (followTarget === which) {
+      setFollowTarget(null)
+      addLog('info', `Stopped following ${which}`)
+    } else {
+      setFollowTarget(which)
+      addLog('info', `Following ${which} — drag the gumball to move the arm`)
+    }
   }
 
   const stateLabel = animState === 'idle' ? 'Idle' : animState.replace(/_/g, ' ')
@@ -102,6 +115,25 @@ export default function ControlPanel() {
           </button>
           <button className="btn-home" onClick={handleHome} disabled={isRunning}>
             Home
+          </button>
+        </div>
+
+        <div className="follow-row">
+          <button
+            className={`btn-follow ${followTarget === 'start' ? 'active' : ''}`}
+            onClick={() => toggleFollow('start')}
+            disabled={isRunning}
+          >
+            <span className="follow-dot" style={{ background: 'var(--accent)' }} />
+            Follow start
+          </button>
+          <button
+            className={`btn-follow ${followTarget === 'end' ? 'active' : ''}`}
+            onClick={() => toggleFollow('end')}
+            disabled={isRunning}
+          >
+            <span className="follow-dot" style={{ background: 'var(--blue)' }} />
+            Follow end
           </button>
         </div>
 

@@ -108,6 +108,41 @@
 .btn-home:hover:not(:disabled) { border-color: var(--ink-3); color: var(--ink); }
 .btn-home:disabled { opacity: 0.35; cursor: not-allowed; }
 
+/* Follow row */
+.follow-row {
+  display: flex;
+  gap: 6px;
+}
+.btn-follow {
+  flex: 1;
+  padding: 6px 0;
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-follow:hover:not(:disabled) { border-color: var(--ink-3); color: var(--ink); }
+.btn-follow.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.btn-follow:disabled { opacity: 0.35; cursor: not-allowed; }
+.follow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
 /* Progress row */
 .prog {
   display: flex;
