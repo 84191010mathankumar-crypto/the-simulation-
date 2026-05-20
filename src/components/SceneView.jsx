@@ -133,9 +133,11 @@ export default function SceneView() {
           dampingFactor={0.08}
         />
 
-        {/* Orientation gizmo */}
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-          <GizmoViewport axisColors={['#ef4444','#10b981','#3b6fff']} labelColor="white" />
+        {/* Orientation gizmo — scaled down 3× */}
+        <GizmoHelper alignment="bottom-right" margin={[40, 40]}>
+          <group scale={0.33}>
+            <GizmoViewport axisColors={['#ef4444','#10b981','#3b6fff']} labelColor="white" />
+          </group>
         </GizmoHelper>
       </Canvas>
 
