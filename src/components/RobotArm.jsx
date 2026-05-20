@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import URDFLoader from 'urdf-loader'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import useStore, { JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
 import { applyAnglesToRobot } from '../utils/ikSolver'
 
@@ -16,21 +17,39 @@ const MATERIALS = {
 }
 
 function meshMaterial(path) {
-  const file = path.split('/').pop().replace('.stl', '').toLowerCase()
-  if (file === 'base_link')                          return MATERIALS.charcoal()
-  if (file === 'link_4' || file === 'link_5' || file === 'link_6') return MATERIALS.anthracite()
+  const file = path.split('/').pop().replace(/\.stl$/i, '').toLowerCase()
+  if (file === 'base_link')                                          return MATERIALS.charcoal()
+  if (file === 'link_4' || file === 'link_5' || file === 'link_6')   return MATERIALS.anthracite()
   return MATERIALS.orange()   // link_1, link_2, link_3
 }
 
-function applyMaterials(obj, path) {
-  if (!obj) return
-  const mat = meshMaterial(path)
-  obj.traverse((child) => {
-    if (!child.isMesh) return
-    child.material      = mat
-    child.castShadow    = true
-    child.receiveShadow = true
-  })
+/* urdf-loader (v0.12) does `obj.material = defaultMaterial` after the user's
+ * loadMeshCb resolves — but ONLY when `obj instanceof THREE.Mesh` (see
+ * node_modules/urdf-loader/src/URDFLoader.js line ~591).
+ *
+ * Idiomatic workaround: hand back a THREE.Group containing the mesh.  The
+ * `instanceof Mesh` check fails so our material survives intact. */
+function makeLoadMeshCb() {
+  return (path, manager, done) => {
+    const ext = path.split('.').pop().toLowerCase()
+    if (ext === 'stl') {
+      new STLLoader(manager).load(
+        path,
+        (geom) => {
+          const mesh = new THREE.Mesh(geom, meshMaterial(path))
+          mesh.castShadow    = true
+          mesh.receiveShadow = true
+          const group = new THREE.Group()
+          group.add(mesh)
+          done(group)
+        },
+        undefined,
+        (err) => done(null, err),
+      )
+      return
+    }
+    done(null, new Error(`Unsupported mesh format: ${ext}`))
+  }
 }
 
 /**
@@ -112,18 +131,9 @@ export default function RobotArm({ parentRef, mountY = 0.05 }) {
     const loader  = new URDFLoader()
     loader.packages = { robot: '/robot' }
 
-    // urdf-loader ALWAYS overwrites mesh.material inside the done() callback:
-    //   done(obj, err) → obj.material = new MeshPhongMaterial()  ← synchronous
-    //
-    // Fix: wrap loadMeshCb so we call done() first (letting urdf-loader apply
-    // its white material), then immediately override with our orange.
-    const builtinCb = loader.loadMeshCb
-    loader.loadMeshCb = (path, manager, done) => {
-      builtinCb(path, manager, (obj, err) => {
-        done(obj, err)              // ← urdf-loader sets white MeshPhongMaterial here
-        applyMaterials(obj, path)   // ← we override per-link right after, synchronously
-      })
-    }
+    // Fully override mesh loading so urdf-loader never assigns its default
+    // white MeshPhongMaterial — we build the mesh + material ourselves.
+    loader.loadMeshCb = makeLoadMeshCb()
 
     loader.load(
       '/robot/kr210_r2700_2.urdf',
