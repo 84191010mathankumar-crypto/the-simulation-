@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useCallback } from 'react'
 import { PivotControls, Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import useStore from '../store/useStore'
+import useStore from '../state/useStore'
 
 const BOX_SIZE = [0.15, 0.15, 0.15]
 export const BOX_HALF = BOX_SIZE[0] / 2

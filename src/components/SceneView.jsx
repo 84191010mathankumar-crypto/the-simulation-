@@ -7,10 +7,7 @@ import {
   GizmoViewport,
 } from '@react-three/drei'
 import * as THREE from 'three'
-import RobotArm from './RobotArm'
-import WorkObject from './WorkObject'
-import AnimationController from './AnimationController'
-import useStore from '../store/useStore'
+import { RobotArm, WorkObject, AnimationController, useStore } from '../lib'
 import './SceneView.css'
 
 /* ─── Static pedestal — bolted, circular, doesn't move ─────── */

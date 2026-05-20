@@ -12,7 +12,7 @@
  *   tool0_localZ_world →  targetZ        (gripper points at the face)
  */
 import * as THREE from 'three'
-import { JOINT_LIMITS, JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
+import { JOINT_LIMITS, JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
 
 // Distance from tool0 origin to the pinch centre between the two finger pads
 export const PINCH_Z = 0.18

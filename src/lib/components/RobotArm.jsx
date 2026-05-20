@@ -3,8 +3,14 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import URDFLoader from 'urdf-loader'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import useStore, { JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
-import { applyAnglesToRobot } from '../utils/ikSolver'
+import useStore, { JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
+import { applyAnglesToRobot } from '../ik/ikSolver'
+
+// Default runtime URLs for the bundled KUKA KR210 R2700-2 assets.
+// Vite serves anything under `public/` at the web root, so these paths work
+// out-of-the-box for any app that copies (or symlinks) `public/lib-assets`.
+export const KR210_DEFAULT_URDF        = '/lib-assets/kr210/kr210_r2700_2.urdf'
+export const KR210_DEFAULT_PACKAGE_DIR = '/lib-assets/kr210'
 
 // Real KUKA colour scheme:
 //   base / link_1–3  → KUKA orange
@@ -125,7 +131,26 @@ function buildGripper() {
   return g
 }
 
-export default function RobotArm({ parentRef, mountY = 0.05 }) {
+/**
+ * RobotArm — loads a URDF, attaches a parallel-jaw gripper, and keeps the
+ * pose in sync with the global store.
+ *
+ * Props:
+ *   parentRef    — ref to the THREE.Group that hosts this arm.  Lets the
+ *                  IK solver discover the platform frame for mobile mode.
+ *   mountY       — height offset (metres) above the parent group.  Use
+ *                  this to drop the arm onto a pedestal or AGV.
+ *   urdfPath     — URL of the .urdf file (default: KR210_DEFAULT_URDF).
+ *   packagePath  — URL prefix that the URDF's `package://robot/...` mesh
+ *                  references resolve against.  Defaults to the bundled
+ *                  KR210 mesh folder.
+ */
+export default function RobotArm({
+  parentRef,
+  mountY      = 0.05,
+  urdfPath    = KR210_DEFAULT_URDF,
+  packagePath = KR210_DEFAULT_PACKAGE_DIR,
+}) {
   const { scene } = useThree()
   const robotRef  = useRef(null)
   const { setRobotLoaded, setRobotRef, addLog } = useStore()
@@ -133,14 +158,14 @@ export default function RobotArm({ parentRef, mountY = 0.05 }) {
   useEffect(() => {
     let cancelled = false
     const loader  = new URDFLoader()
-    loader.packages = { robot: '/robot' }
+    loader.packages = { robot: packagePath }
 
     // Fully override mesh loading so urdf-loader never assigns its default
     // white MeshPhongMaterial — we build the mesh + material ourselves.
     loader.loadMeshCb = makeLoadMeshCb()
 
     loader.load(
-      '/robot/kr210_r2700_2.urdf',
+      urdfPath,
       (robot) => {
         if (cancelled) return
 

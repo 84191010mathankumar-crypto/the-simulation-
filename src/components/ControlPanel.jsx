@@ -1,5 +1,5 @@
 import React from 'react'
-import useStore, { JOINT_NAMES, JOINT_LIMITS } from '../store/useStore'
+import { useStore, JOINT_NAMES, JOINT_LIMITS } from '../lib'
 import './ControlPanel.css'
 
 const rad2deg = (r) => (r * 180) / Math.PI

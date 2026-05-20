@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import useStore, { JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
+import useStore, { JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
 import {
   applyAnglesToRobot,
   readAnglesFromRobot,
@@ -10,7 +10,7 @@ import {
   lerpAngles,
   easeInOutCubic,
   clampAllJoints,
-} from '../utils/ikSolver'
+} from '../ik/ikSolver'
 
 // Seconds per motion segment
 const SPEED = {

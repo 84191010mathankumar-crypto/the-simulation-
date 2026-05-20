@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import * as THREE from 'three'
-import { WORKING_AREA } from '../store/useStore'
+import { WORKING_AREA } from '../state/useStore'
 
 /**
  * Visualises the KR210 R2700-2 working envelope as a transparent cylinder
