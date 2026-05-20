@@ -3,15 +3,12 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import {
   OrbitControls,
   Grid,
-  Environment,
   GizmoHelper,
   GizmoViewport,
-  ContactShadows,
 } from '@react-three/drei'
 import * as THREE from 'three'
 import RobotArm from './RobotArm'
 import WorkObject from './WorkObject'
-import WorkingEnvelope from './WorkingEnvelope'
 import AnimationController from './AnimationController'
 import useStore from '../store/useStore'
 import './SceneView.css'
@@ -143,69 +140,52 @@ export default function SceneView() {
     <div className="scene-view">
       <Canvas
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
-        shadows
-        gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
-        onCreated={({ gl }) => {
-          gl.toneMappingExposure = 0.65
-          gl.shadowMap.type = THREE.PCFSoftShadowMap
-        }}
+        shadows                              /* default PCFShadowMap — cheap-ish */
+        dpr={[1, 1.5]}                       /* cap pixel ratio so 4K doesn't render at 2× */
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
       >
-        {/* Lighting — bright key + soft fill */}
-        <ambientLight intensity={0.22} />
-        <hemisphereLight args={['#ffffff', '#dde4ef', 0.28]} />
+        {/* Lighting — hemi + key + fill.  No HDR Environment / no tone
+            mapping; cheap and the orange reads as orange. */}
+        <hemisphereLight args={['#ffffff', '#d6dbe4', 0.65]} />
+        <ambientLight intensity={0.45} />
         <directionalLight
           position={[6, 9, 5]}
-          intensity={0.7}
+          intensity={1.6}
           castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-bias={-0.0001}
-          shadow-normalBias={0.02}
-          shadow-camera-near={0.1}
-          shadow-camera-far={40}
-          shadow-camera-left={-5}
-          shadow-camera-right={5}
-          shadow-camera-top={6}
+          shadow-mapSize={[1024, 1024]}      /* 2k → 1k */
+          shadow-bias={-0.0002}
+          shadow-camera-near={0.5}
+          shadow-camera-far={20}
+          shadow-camera-left={-4}
+          shadow-camera-right={4}
+          shadow-camera-top={5}
           shadow-camera-bottom={-2}
         />
-        <pointLight position={[-3, 4, -2]} intensity={0.20} color="#ffe9c8" />
-
-        <Environment preset="studio" background={false} environmentIntensity={0.45} />
 
         <Grid
-          args={[20, 20]}
+          args={[18, 18]}
           cellSize={0.5}
           cellThickness={0.5}
           cellColor="#cfd5e0"
           sectionSize={2}
           sectionThickness={1.0}
           sectionColor="#a8b0c0"
-          fadeDistance={18}
-          fadeStrength={1.2}
+          fadeDistance={14}
+          fadeStrength={1.4}
           followCamera={false}
           infiniteGrid
           position={[0, 0.0005, 0]}
         />
 
-        <ContactShadows
-          position={[0, 0.001, 0]}
-          opacity={0.55}
-          scale={mobileMode ? 14 : 10}
-          blur={2.6}
-          far={4}
-          resolution={1024}
-          color="#1a1d24"
-        />
-
         <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
           <planeGeometry args={[40, 40]} />
-          <shadowMaterial opacity={0.18} />
+          <shadowMaterial opacity={0.20} />
         </mesh>
 
         <Suspense fallback={null}>
           <RobotBase mobileMode={mobileMode} />
           <WorkObject objectKey="start" color="#c15f3c" />
           <WorkObject objectKey="end"   color="#4a6ea3" />
-          <WorkingEnvelope />
           <AnimationController />
         </Suspense>
 
