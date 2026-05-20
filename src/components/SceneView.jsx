@@ -1,5 +1,5 @@
-import React, { Suspense, useRef, useMemo, useCallback } from 'react'
-import { Canvas } from '@react-three/fiber'
+import React, { Suspense, useRef, useEffect } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import {
   OrbitControls,
   Grid,
@@ -7,7 +7,6 @@ import {
   GizmoHelper,
   GizmoViewport,
   ContactShadows,
-  PivotControls,
 } from '@react-three/drei'
 import * as THREE from 'three'
 import RobotArm from './RobotArm'
@@ -98,75 +97,47 @@ function MobilePlatform() {
   )
 }
 
-/* ─── Wrapper group that hosts robot + platform; transformed by store ─── */
-function RobotBase({ mobileMode, platformPose, setPlatformPose }) {
+/* ─── Wrapper group that hosts robot + platform ─────────────
+ *   Its transform is driven by `platformPose` from the store. The AnimationController
+ *   writes to that pose during a Run sequence so the AGV drives to each target. */
+function RobotBase({ mobileMode }) {
   const baseRef = useRef()
+  const setPlatformGroupRef = useStore((s) => s.setPlatformGroupRef)
 
-  // Initial gumball matrix for the AGV — only used when mobile mode is on
-  const initialMatrix = useMemo(() => {
-    const m = new THREE.Matrix4()
-    const p = new THREE.Vector3(...platformPose.position)
-    const e = new THREE.Euler(
-      platformPose.rotation[0],
-      platformPose.rotation[1],
-      platformPose.rotation[2],
-      'XYZ',
-    )
-    m.compose(p, new THREE.Quaternion().setFromEuler(e), new THREE.Vector3(1, 1, 1))
-    return m
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mobileMode])   // recompute when toggling mode (so the gumball resets)
+  // Expose the group to the store so the IK solver can probe it under
+  // "future platform pose" hypotheticals.
+  useEffect(() => {
+    setPlatformGroupRef(baseRef.current || null)
+    return () => setPlatformGroupRef(null)
+  }, [setPlatformGroupRef, mobileMode])
 
-  // Write the platform's new pose into the store as the user drags it.
-  // We keep it on the floor (y locked to 0) and only allow yaw rotation.
-  const onPlatformDrag = useCallback((world) => {
-    const pos = new THREE.Vector3()
-    const quat = new THREE.Quaternion()
-    const scl = new THREE.Vector3()
-    world.decompose(pos, quat, scl)
-    const eul = new THREE.Euler().setFromQuaternion(quat, 'YXZ')
-    setPlatformPose({
-      position: [pos.x, 0, pos.z],   // y pinned to floor
-      rotation: [0, eul.y, 0],       // only yaw
-    })
-  }, [setPlatformPose])
+  // Each frame, copy platformPose from the store into the group transform.
+  useFrame(() => {
+    const g = baseRef.current
+    if (!g) return
+    const { mobileMode: mm, platformPose: p } = useStore.getState()
+    if (mm) {
+      g.position.set(p.position[0], p.position[1], p.position[2])
+      g.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2])
+    } else if (g.position.x !== 0 || g.position.z !== 0 || g.rotation.y !== 0) {
+      g.position.set(0, 0, 0)
+      g.rotation.set(0, 0, 0)
+    }
+  })
 
-  // Mount-disc top is at y=0.235 on the AGV; the static pedestal sits at y=0.05.
-  // We pass the robot a parent group and offset its local Y so its base lands
-  // on whichever surface is rendered.
+  // Mount-disc top is at y=0.235 on the AGV; static pedestal sits at y=0.05.
   const robotLocalY = mobileMode ? 0.235 : 0.05
 
-  const baseContent = (
+  return (
     <group ref={baseRef}>
       {mobileMode ? <MobilePlatform /> : <MountingPlate />}
       <RobotArm parentRef={baseRef} mountY={robotLocalY} />
     </group>
   )
-
-  if (!mobileMode) return baseContent
-
-  return (
-    <PivotControls
-      scale={70}
-      fixed
-      lineWidth={2}
-      depthTest={false}
-      anchor={[0, 0, 0]}
-      activeAxes={[true, false, true]}    // XZ translate only (no Y)
-      disableSliders                       // no plane handles
-      matrix={initialMatrix}
-      autoTransform
-      onDrag={onPlatformDrag}
-    >
-      {baseContent}
-    </PivotControls>
-  )
 }
 
 export default function SceneView() {
-  const mobileMode      = useStore((s) => s.mobileMode)
-  const platformPose    = useStore((s) => s.platformPose)
-  const setPlatformPose = useStore((s) => s.setPlatformPose)
+  const mobileMode = useStore((s) => s.mobileMode)
 
   return (
     <div className="scene-view">
@@ -231,11 +202,7 @@ export default function SceneView() {
         </mesh>
 
         <Suspense fallback={null}>
-          <RobotBase
-            mobileMode={mobileMode}
-            platformPose={platformPose}
-            setPlatformPose={setPlatformPose}
-          />
+          <RobotBase mobileMode={mobileMode} />
           <WorkObject objectKey="start" color="#c15f3c" />
           <WorkObject objectKey="end"   color="#4a6ea3" />
           <WorkingEnvelope />

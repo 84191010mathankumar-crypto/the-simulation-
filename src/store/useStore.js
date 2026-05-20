@@ -80,6 +80,9 @@ const useStore = create((set, get) => ({
     position: [0, 0, 0],
     rotation: [0, 0, 0],
   },
+  platformGroupRef: null,    // THREE.Group of the platform — set by SceneView
+  fromPlatform:    null,     // anim segment start pose
+  toPlatform:      null,     // anim segment end pose
 
   // ── Log ──────────────────────────────────────────────────────────
   logs: [],
@@ -103,6 +106,7 @@ const useStore = create((set, get) => ({
   setFollowTarget: (which) => set({ followTarget: which }),
   setMobileMode: (v) => set({ mobileMode: v }),
   setPlatformPose: (pose) => set({ platformPose: pose }),
+  setPlatformGroupRef: (r) => set({ platformGroupRef: r }),
   setAnimProgress: (p)  => set({ animProgress: p }),
   setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),
 
