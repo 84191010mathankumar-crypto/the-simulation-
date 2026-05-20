@@ -1,78 +1,176 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import useStore, { JOINT_NAMES, JOINT_LIMITS } from '../store/useStore'
 import './ControlPanel.css'
 
-const rad2deg = (r) => ((r * 180) / Math.PI).toFixed(1)
+// ─── Helpers ────────────────────────────────────────────────────────
+const rad2deg = (r) => (r * 180) / Math.PI
+const deg2rad = (d) => (d * Math.PI) / 180
+const fmtDeg  = (r) => rad2deg(r).toFixed(1)
 
-function JointBar({ name, value }) {
-  const lim = JOINT_LIMITS[name]
-  const range = lim.upper - lim.lower
-  const pct = ((value - lim.lower) / range) * 100
-  const zeroPct = ((0 - lim.lower) / range) * 100
-  const nearLimit = value < lim.lower + 0.05 || value > lim.upper - 0.05
-
-  return (
-    <div className="joint-row">
-      <span className="joint-name">{name.replace('joint_', 'A')}</span>
-      <div className="joint-track">
-        <div className="joint-fill" style={{ width: `${pct}%` }} />
-        <div className="joint-zero" style={{ left: `${zeroPct}%` }} />
-      </div>
-      <span className={`joint-val ${nearLimit ? 'warn' : ''}`}>{rad2deg(value)}°</span>
-    </div>
+// Map a grab vector to a friendly face name and back.
+const GRAB_FACES = [
+  { key: '+Y', label: 'Top  (+Y)',     vec: [0,  1, 0] },
+  { key: '-Y', label: 'Bottom  (-Y)',  vec: [0, -1, 0] },
+  { key: '+X', label: 'Front  (+X)',   vec: [1,  0, 0] },
+  { key: '-X', label: 'Back  (-X)',    vec: [-1, 0, 0] },
+  { key: '+Z', label: 'Right  (+Z)',   vec: [0,  0, 1] },
+  { key: '-Z', label: 'Left  (-Z)',    vec: [0,  0,-1] },
+]
+const vecToFaceKey = (v) => {
+  const f = GRAB_FACES.find((f) =>
+    Math.abs(f.vec[0] - v[0]) < 0.01 &&
+    Math.abs(f.vec[1] - v[1]) < 0.01 &&
+    Math.abs(f.vec[2] - v[2]) < 0.01
   )
+  return f?.key ?? '+Y'
 }
 
-function ObjectRow({ label, obj, color, isSelected, onSelect, mode, onModeChange }) {
-  const f3 = (v) => v.toFixed(3)
-  const [p, r, g] = [obj.position, obj.rotation, obj.grabVector]
-
-  return (
-    <div className={`obj-row ${isSelected ? 'selected' : ''}`} onClick={onSelect}>
-      <div className="obj-row-head">
-        <span className="obj-dot" style={{ background: color }} />
-        <span className="obj-label">{label}</span>
-        {isSelected && (
-          <div className="mode-toggle">
-            <button
-              className={mode === 'translate' ? 'active' : ''}
-              onClick={(e) => { e.stopPropagation(); onModeChange('translate') }}
-            >Move</button>
-            <button
-              className={mode === 'rotate' ? 'active' : ''}
-              onClick={(e) => { e.stopPropagation(); onModeChange('rotate') }}
-            >Rotate</button>
-          </div>
-        )}
-      </div>
-      <div className="obj-meta">
-        <span className="obj-meta-label">Pos</span>
-        <span>{f3(p[0])}</span><span>{f3(p[1])}</span><span>{f3(p[2])}</span>
-        <span className="obj-meta-label">Rot</span>
-        <span>{rad2deg(r[0])}°</span><span>{rad2deg(r[1])}°</span><span>{rad2deg(r[2])}°</span>
-        <span className="obj-meta-label">Grab</span>
-        <span>{f3(g[0])}</span><span>{f3(g[1])}</span><span>{f3(g[2])}</span>
-      </div>
-    </div>
-  )
-}
-
-function LogEntry({ entry }) {
-  const colors = {
-    info:  'var(--ink-4)',
-    ok:    'var(--green)',
-    warn:  'var(--accent)',
-    error: 'var(--red)',
+// ─── Number input that commits on blur or Enter ─────────────────────
+function NumInput({ tag, value, step = 0.05, onCommit }) {
+  const [draft, setDraft] = useState(value.toFixed(3))
+  useEffect(() => { setDraft(value.toFixed(3)) }, [value])
+  const commit = () => {
+    const n = parseFloat(String(draft).replace(',', '.'))
+    if (Number.isFinite(n)) onCommit(n)
+    else setDraft(value.toFixed(3))
   }
+  return (
+    <div className="num">
+      <span className="num-tag">{tag}</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'ArrowUp')   { e.preventDefault(); onCommit((parseFloat(draft) || 0) + step) }
+          if (e.key === 'ArrowDown') { e.preventDefault(); onCommit((parseFloat(draft) || 0) - step) }
+        }}
+      />
+    </div>
+  )
+}
+
+// ─── Target editor ──────────────────────────────────────────────────
+const DEFAULT_TARGETS = {
+  start: { position: [0.8,  0.4, 0.5], rotation: [0, 0, 0], grabVector: [0, 1, 0] },
+  end:   { position: [0.8, -0.4, 0.5], rotation: [0, 0, 0], grabVector: [0, 1, 0] },
+}
+
+function TargetEditor({ which }) {
+  const {
+    startObject, endObject, setStartObject, setEndObject,
+    transformMode, setTransformMode,
+  } = useStore()
+  const obj   = which === 'start' ? startObject : endObject
+  const setO  = which === 'start' ? setStartObject : setEndObject
+
+  const setAxis = (key, idx, v) => {
+    const arr = [...obj[key]]
+    arr[idx] = v
+    setO({ [key]: arr })
+  }
+  const setRotDeg = (idx, deg) => setAxis('rotation', idx, deg2rad(deg))
+  const setGrab   = (faceKey) => {
+    const f = GRAB_FACES.find((f) => f.key === faceKey)
+    if (f) setO({ grabVector: [...f.vec] })
+  }
+  const reset = () => setO({ ...DEFAULT_TARGETS[which] })
+
+  return (
+    <>
+      <div className="field-group">
+        <div className="field-label">Position (m)</div>
+        <div className="xyz">
+          <NumInput tag="X" value={obj.position[0]} onCommit={(v) => setAxis('position', 0, v)} />
+          <NumInput tag="Y" value={obj.position[1]} onCommit={(v) => setAxis('position', 1, v)} />
+          <NumInput tag="Z" value={obj.position[2]} onCommit={(v) => setAxis('position', 2, v)} />
+        </div>
+      </div>
+
+      <div className="field-group">
+        <div className="field-label">Rotation (°)</div>
+        <div className="xyz">
+          <NumInput tag="X" step={5} value={rad2deg(obj.rotation[0])} onCommit={(v) => setRotDeg(0, v)} />
+          <NumInput tag="Y" step={5} value={rad2deg(obj.rotation[1])} onCommit={(v) => setRotDeg(1, v)} />
+          <NumInput tag="Z" step={5} value={rad2deg(obj.rotation[2])} onCommit={(v) => setRotDeg(2, v)} />
+        </div>
+      </div>
+
+      <div className="field-group">
+        <div className="field-label">Grab face</div>
+        <select
+          className="select"
+          value={vecToFaceKey(obj.grabVector)}
+          onChange={(e) => setGrab(e.target.value)}
+        >
+          {GRAB_FACES.map((f) => (
+            <option key={f.key} value={f.key}>{f.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="editor-actions">
+        <div className="gizmo-mode">
+          <button
+            className={transformMode === 'translate' ? 'active' : ''}
+            onClick={() => setTransformMode('translate')}
+          >Move</button>
+          <button
+            className={transformMode === 'rotate' ? 'active' : ''}
+            onClick={() => setTransformMode('rotate')}
+          >Rotate</button>
+        </div>
+        <button className="btn-link" onClick={reset}>Reset</button>
+      </div>
+    </>
+  )
+}
+
+// ─── Joints (compact, two-column) ──────────────────────────────────
+function Joints({ angles }) {
+  return (
+    <div className="joints">
+      {JOINT_NAMES.map((n) => {
+        const v   = angles[n] ?? 0
+        const lim = JOINT_LIMITS[n]
+        const pct  = ((v - lim.lower) / (lim.upper - lim.lower)) * 100
+        const zPct = ((0 - lim.lower) / (lim.upper - lim.lower)) * 100
+        const near = v < lim.lower + 0.05 || v > lim.upper - 0.05
+        return (
+          <div className="j-row" key={n}>
+            <span className="j-name">{n.replace('joint_', 'A')}</span>
+            <div className="j-track">
+              <div className="j-fill" style={{ width: `${pct}%` }} />
+              <div className="j-zero" style={{ left: `${zPct}%` }} />
+            </div>
+            <span className={`j-val ${near ? 'warn' : ''}`}>{fmtDeg(v)}°</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Log entry ──────────────────────────────────────────────────────
+const LEVEL_COLOR = {
+  info:  'var(--ink-4)',
+  ok:    'var(--green)',
+  warn:  'var(--accent)',
+  error: 'var(--red)',
+}
+function LogEntry({ entry }) {
   return (
     <div className="log-entry">
       <span className="log-ts">{(entry.ts / 1000).toFixed(2)}s</span>
-      <span className="log-bullet" style={{ color: colors[entry.level] }}>●</span>
+      <span className="log-bullet" style={{ color: LEVEL_COLOR[entry.level] }}>●</span>
       <span className="log-msg">{entry.msg}</span>
       {entry.extra && (
         <div className="log-extra">
           {Object.entries(entry.extra).map(([k, v]) => (
-            <span key={k}>{k} <b>{typeof v === 'number' ? rad2deg(v) + '°' : v}</b></span>
+            <span key={k}>{k} <b>{typeof v === 'number' ? fmtDeg(v) + '°' : v}</b></span>
           ))}
         </div>
       )}
@@ -80,30 +178,24 @@ function LogEntry({ entry }) {
   )
 }
 
+// ─── Main panel ─────────────────────────────────────────────────────
 export default function ControlPanel() {
   const {
     jointAngles, robotLoaded, animState, animProgress,
-    startObject, endObject,
     selectedObject, setSelectedObject,
-    transformMode, setTransformMode,
     addLog, clearLogs, logs,
     setAnimState, resetToHome,
   } = useStore()
 
-  const logRef = useRef(null)
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = 0
-  }, [logs.length])
+  const canRun   = robotLoaded && animState === 'idle'
+  const isRunning = animState !== 'idle'
 
-  const canExecute = robotLoaded && animState === 'idle'
-  const isRunning  = animState !== 'idle'
-
-  const handleExecute = () => {
-    if (!canExecute) return
+  const handleRun = () => {
+    if (!canRun) return
     addLog('info', 'Moving to start position…')
     setAnimState('moving_to_start')
   }
-  const handleReset = () => {
+  const handleHome = () => {
     resetToHome()
     addLog('info', 'Returned to home')
   }
@@ -112,88 +204,83 @@ export default function ControlPanel() {
 
   return (
     <aside className="control-panel">
-      {/* Header */}
-      <div className="panel-header">
-        <div className="panel-header-top">
-          <span className="panel-title">KUKA KR210</span>
-          <span className={`status-pill ${robotLoaded ? '' : 'offline'}`}>
-            <span className="status-dot" />
-            {robotLoaded ? 'Ready' : 'Loading'}
-          </span>
+      {/* Sticky head: brand + Run + progress */}
+      <div className="panel-head">
+        <div className="brand">
+          <div className="brand-top">
+            <span className="brand-title">KUKA KR210</span>
+            <span className={`status ${robotLoaded ? '' : 'off'}`}>
+              <span className="status-dot" />
+              {robotLoaded ? 'Ready' : 'Loading'}
+            </span>
+          </div>
+          <span className="brand-subtitle">R2700-2 · pick & place demo</span>
         </div>
-        <span className="panel-subtitle">R2700-2 · 6-axis pick & place</span>
+
+        <div className="run-row">
+          <button
+            className={`btn-run ${isRunning ? 'running' : ''} ${canRun || isRunning ? '' : 'disabled'}`}
+            onClick={handleRun}
+            disabled={!canRun}
+          >
+            {isRunning ? 'Running…' : 'Run pick & place'}
+          </button>
+          <button className="btn-home" onClick={handleHome} disabled={isRunning}>
+            Home
+          </button>
+        </div>
+
+        <div className="prog">
+          <span className="prog-state">{stateLabel}</span>
+          <div className="prog-track">
+            <div className="prog-fill" style={{ width: `${animProgress * 100}%` }} />
+          </div>
+          <span className="prog-pct">{Math.round(animProgress * 100)}%</span>
+        </div>
       </div>
 
-      {/* Work objects */}
-      <section className="panel-section">
-        <div className="section-title">Targets</div>
-        <div className="obj-list">
-          <ObjectRow
-            label="Start"
-            obj={startObject}
-            color="var(--accent)"
-            isSelected={selectedObject === 'start'}
-            onSelect={() => setSelectedObject('start')}
-            mode={transformMode}
-            onModeChange={setTransformMode}
-          />
-          <ObjectRow
-            label="End"
-            obj={endObject}
-            color="var(--blue)"
-            isSelected={selectedObject === 'end'}
-            onSelect={() => setSelectedObject('end')}
-            mode={transformMode}
-            onModeChange={setTransformMode}
-          />
-        </div>
-      </section>
+      {/* Everything below scrolls as a single column */}
+      <div className="panel-scroll">
+        {/* Targets */}
+        <section className="section">
+          <div className="section-head">Targets</div>
+          <div className="tabs">
+            <button
+              className={selectedObject === 'start' ? 'active' : ''}
+              onClick={() => setSelectedObject('start')}
+            >
+              <span className="tab-dot" style={{ background: 'var(--accent)' }} />
+              Start
+            </button>
+            <button
+              className={selectedObject === 'end' ? 'active' : ''}
+              onClick={() => setSelectedObject('end')}
+            >
+              <span className="tab-dot" style={{ background: 'var(--blue)' }} />
+              End
+            </button>
+          </div>
+          <TargetEditor which={selectedObject} />
+        </section>
 
-      {/* Run */}
-      <section className="panel-section">
-        <div className="ctrl-row">
-          <button
-            className={`btn-execute ${canExecute ? '' : 'disabled'}`}
-            onClick={handleExecute}
-          >
-            {isRunning ? 'Running…' : 'Run sequence'}
-          </button>
-          <button
-            className="btn-reset"
-            onClick={handleReset}
-            disabled={animState !== 'idle'}
-          >Home</button>
-        </div>
-        <div className="anim-status">
-          <span className="anim-status-label">{stateLabel}</span>
-          <span className="anim-status-pct">{(animProgress * 100).toFixed(0)}%</span>
-        </div>
-        <div className="anim-bar-track">
-          <div className="anim-bar-fill" style={{ width: `${animProgress * 100}%` }} />
-        </div>
-      </section>
+        {/* Joints */}
+        <section className="section">
+          <div className="section-head">Joints</div>
+          <Joints angles={jointAngles} />
+        </section>
 
-      {/* Joints */}
-      <section className="panel-section">
-        <div className="section-title">Joints</div>
-        <div className="joints-grid">
-          {JOINT_NAMES.map((n) => (
-            <JointBar key={n} name={n} value={jointAngles[n] ?? 0} />
-          ))}
-        </div>
-      </section>
-
-      {/* Log */}
-      <section className="panel-section log-section">
-        <div className="section-title">
-          Activity
-          <button className="btn-clear" onClick={clearLogs}>Clear</button>
-        </div>
-        <div className="log-scroll" ref={logRef}>
-          {logs.length === 0 && <div className="log-empty">No events yet.</div>}
-          {logs.map((e) => <LogEntry key={e.id} entry={e} />)}
-        </div>
-      </section>
+        {/* Activity log */}
+        <section className="section">
+          <div className="section-head">
+            Activity
+            <button className="btn-clear" onClick={clearLogs}>Clear</button>
+          </div>
+          <div className="log-list">
+            {logs.length === 0 && <div className="log-empty">No events yet.</div>}
+            {logs.map((e) => <LogEntry key={e.id} entry={e} />)}
+          </div>
+        </section>
+      </div>
     </aside>
   )
 }
