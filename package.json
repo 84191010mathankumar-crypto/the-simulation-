@@ -5,7 +5,6 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-
   "main": "./src/lib/index.js",
   "module": "./src/lib/index.js",
   "exports": {
@@ -23,13 +22,13 @@
     "README.md",
     "LICENSE"
   ],
-
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
-
   "peerDependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
@@ -39,19 +38,18 @@
     "urdf-loader": "^0.12.7",
     "zustand": "^5.0.0"
   },
-
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "vitest": "^4.1.7"
   },
-
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "three": "^0.184.0",
     "urdf-loader": "^0.12.7",
-    "zustand": "^5.0.13"
+    "zustand": "^5.0.0"
   }
 }

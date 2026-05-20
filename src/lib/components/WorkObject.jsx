@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useCallback } from 'react'
 import { PivotControls, Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import useStore from '../state/useStore'
+import { useRobotStore } from '../state/store.jsx'
 
 const BOX_SIZE = [0.15, 0.15, 0.15]
 export const BOX_HALF = BOX_SIZE[0] / 2
@@ -19,7 +19,7 @@ export default function WorkObject({ objectKey, color }) {
   const {
     startObject, endObject,
     setStartObject, setEndObject,
-  } = useStore()
+  } = useRobotStore()
 
   const isStart = objectKey === 'start'
   const obj     = isStart ? startObject : endObject

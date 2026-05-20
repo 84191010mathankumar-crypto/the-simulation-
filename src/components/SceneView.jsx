@@ -7,7 +7,7 @@ import {
   GizmoViewport,
 } from '@react-three/drei'
 import * as THREE from 'three'
-import { RobotArm, WorkObject, AnimationController, useStore } from '../lib'
+import { RobotArm, WorkObject, AnimationController, useRobotStore, useRobotStoreApi } from '../lib'
 import './SceneView.css'
 
 /* ─── Static pedestal — bolted, circular, doesn't move ─────── */
@@ -96,7 +96,8 @@ function MobilePlatform() {
  *   writes to that pose during a Run sequence so the AGV drives to each target. */
 function RobotBase({ mobileMode }) {
   const baseRef = useRef()
-  const setPlatformGroupRef = useStore((s) => s.setPlatformGroupRef)
+  const storeApi = useRobotStoreApi()
+  const setPlatformGroupRef = useRobotStore((s) => s.setPlatformGroupRef)
 
   // Expose the group to the store so the IK solver can probe it under
   // "future platform pose" hypotheticals.
@@ -109,7 +110,7 @@ function RobotBase({ mobileMode }) {
   useFrame(() => {
     const g = baseRef.current
     if (!g) return
-    const { mobileMode: mm, platformPose: p } = useStore.getState()
+    const { mobileMode: mm, platformPose: p } = storeApi.getState()
     if (mm) {
       g.position.set(p.position[0], p.position[1], p.position[2])
       g.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2])
@@ -131,7 +132,7 @@ function RobotBase({ mobileMode }) {
 }
 
 export default function SceneView() {
-  const mobileMode = useStore((s) => s.mobileMode)
+  const mobileMode = useRobotStore((s) => s.mobileMode)
 
   return (
     <div className="scene-view">

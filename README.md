@@ -71,9 +71,12 @@ roboclaw/
         │   ├── WorkObject.jsx
         │   └── WorkingEnvelope.jsx
         ├── state/
-        │   └── useStore.js   ← Zustand store (joint angles, anim state, etc.)
+        │   ├── constants.js  ← joint names / limits / home pose / working area
+        │   ├── store.jsx     ← createRobotStore factory + Context + hooks
+        │   └── store.test.js
         └── ik/
-            └── ikSolver.js   ← CCD inverse kinematics + grab-pose math
+            ├── ikSolver.js   ← CCD inverse kinematics + grab-pose math
+            └── ikSolver.test.js
 ```
 
 **Rule of thumb:** if it's in [src/lib/](src/lib/), it's part of the library and stable.  If it's anywhere else under `src/`, it's demo-app glue that you should *not* depend on from a bigger project — copy it instead.
@@ -94,51 +97,99 @@ import {
   AnimationController,
   WorkObject,
   WorkingEnvelope,
-  useStore,
+  RobotStoreProvider,
+  createRobotStore,
+  useRobotStore,
+  useRobotStoreApi,
 } from '../lib'   // <- this is the library entry point
 ```
 
 You also need the bundled robot assets to be reachable via HTTP.  Because Vite serves everything under `public/` at the web root, the defaults (`/lib-assets/kr210/...`) already work.  Nothing to do.
 
-A minimal scene:
+#### Single robot — minimal scene
+
+Every robot needs its own state.  Wrap the components for one arm in a `<RobotStoreProvider>` — without a `store` prop it creates one lazily:
 
 ```jsx
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { RobotArm, AnimationController, WorkObject } from './lib'
+import {
+  RobotArm, AnimationController, WorkObject,
+  RobotStoreProvider,
+} from './lib'
 
 export default function MyScene() {
   return (
-    <Canvas camera={{ position: [4, 2.6, 4], fov: 42 }} shadows>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[6, 9, 5]} intensity={1.4} castShadow />
+    <RobotStoreProvider>
+      <Canvas camera={{ position: [4, 2.6, 4], fov: 42 }} shadows>
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[6, 9, 5]} intensity={1.4} castShadow />
 
-      {/* one robot arm at the world origin */}
-      <RobotArm mountY={0.05} />
+        <RobotArm mountY={0.05} />
+        <WorkObject objectKey="start" color="#c15f3c" />
+        <WorkObject objectKey="end"   color="#4a6ea3" />
+        <AnimationController />
 
-      {/* two draggable pose targets */}
-      <WorkObject objectKey="start" color="#c15f3c" />
-      <WorkObject objectKey="end"   color="#4a6ea3" />
+        <OrbitControls makeDefault target={[0, 1, 0]} />
+      </Canvas>
+    </RobotStoreProvider>
+  )
+}
+```
 
-      {/* drives the pick-and-place state machine */}
-      <AnimationController />
+Any UI button or panel that needs to read/write state:
 
-      <OrbitControls makeDefault target={[0, 1, 0]} />
+```jsx
+import { useRobotStore } from './lib'
+
+function RunButton() {
+  const setAnimState = useRobotStore((s) => s.setAnimState)
+  return <button onClick={() => setAnimState('moving_to_start')}>Run</button>
+}
+```
+
+#### Multiple robots in the same scene
+
+Create one store per arm and wire each `<RobotStoreProvider>` to its own:
+
+```jsx
+import { useMemo } from 'react'
+import {
+  RobotArm, AnimationController, WorkObject,
+  RobotStoreProvider, createRobotStore,
+} from './lib'
+
+export default function MultiRobotScene() {
+  const armA = useMemo(() => createRobotStore(), [])
+  const armB = useMemo(() => createRobotStore(), [])
+
+  return (
+    <Canvas>
+      {/* … lights, controls … */}
+
+      <RobotStoreProvider store={armA}>
+        <group position={[-1.5, 0, 0]}>
+          <RobotArm />
+          <WorkObject objectKey="start" color="#c15f3c" />
+          <WorkObject objectKey="end"   color="#4a6ea3" />
+          <AnimationController />
+        </group>
+      </RobotStoreProvider>
+
+      <RobotStoreProvider store={armB}>
+        <group position={[1.5, 0, 0]}>
+          <RobotArm />
+          <WorkObject objectKey="start" color="#10b981" />
+          <WorkObject objectKey="end"   color="#3b6fff" />
+          <AnimationController />
+        </group>
+      </RobotStoreProvider>
     </Canvas>
   )
 }
 ```
 
-Then anywhere else (a button, an effect):
-
-```jsx
-import { useStore } from './lib'
-
-function RunButton() {
-  const start = () => useStore.getState().setAnimState('moving_to_start')
-  return <button onClick={start}>Run</button>
-}
-```
+Each provider scope is independent — joint angles, animation state, logs, and work-object poses are stored separately.  Control panels can target a specific arm by holding the store directly (e.g. `armA.getState().setAnimState('moving_to_start')`).
 
 ### 3b. As an npm package (later)
 
@@ -185,15 +236,20 @@ Everything below is exported from `roboclaw` (i.e. `src/lib/index.js`):
 | `WorkObject` | Draggable box + 3D gizmo representing a pick-or-place target. |
 | `WorkingEnvelope` | Transparent cylinder visualising the robot's reachable workspace. |
 
-### State (Zustand store)
+### State (Zustand factory + React Context)
 
 | Name | What it is |
 | --- | --- |
-| `useStore` | The global store hook.  Read with `useStore(s => s.jointAngles)`, write with `useStore.setState({...})` or via actions like `setAnimState`, `setStartObject`, `setMobileMode`. |
+| `createRobotStore()` | Factory returning an isolated, per-robot Zustand store. |
+| `<RobotStoreProvider store={...}>` | Context provider that scopes child components to one store.  Omit `store` to auto-create. |
+| `useRobotStore(selector?)` | Hook to read state and subscribe to changes.  `useRobotStore(s => s.jointAngles)`. |
+| `useRobotStoreApi()` | Returns the raw store handle (`.getState()`, `.setState()`, `.subscribe(selector, cb)`).  Use this inside `useFrame` / `useEffect` when you don't want re-renders. |
 | `JOINT_NAMES` | `['joint_1', ..., 'joint_6']`. |
 | `JOINT_LIMITS` | URDF joint limits in radians. |
 | `HOME_ANGLES` | Default joint pose. |
 | `WORKING_AREA` | `{ radius, minZ, maxZ }` for the reach envelope. |
+
+The store is built with the `subscribeWithSelector` middleware, so `store.subscribe(selector, listener)` works as documented for hot-path updates (e.g. applying joint angles to the URDF every frame without forcing a React render).
 
 ### Inverse-kinematics primitives
 
@@ -210,16 +266,32 @@ Everything below is exported from `roboclaw` (i.e. `src/lib/index.js`):
 
 ## 6. Architecture notes
 
-- **State is held in a Zustand singleton** (`useStore`).  This is fine for one robot per page; it is the **one thing that needs to change** to support multiple robots in the same scene.  Converting `useStore` into a factory (`createRobotStore()` returning a fresh store per arm) is the planned refactor.
+- **State is a per-robot Zustand store** produced by `createRobotStore()` and threaded through `<RobotStoreProvider>`.  This is what makes multi-robot scenes possible — each provider is an isolated scope with its own joint angles, animation state, logs, etc.  Constants like joint limits and home pose live in [src/lib/state/constants.js](src/lib/state/constants.js), not the store, so the IK math has no runtime-state dependency.
 - **IK is iterative CCD** — fast, no inverse-Jacobian, robust to limits.  It restarts from several seed poses to avoid local minima.  Expect occasional misses on awkward orientations.
 - **The URDF loader is `urdf-loader` v0.12.x** — we override `loadMeshCb` so we can apply our own KUKA-orange / anthracite materials instead of its default white phong.
 - **Mobile mode plumbing** lives in `SceneView.RobotBase` (demo) and `AnimationController._solveSegment` (lib).  The platform's THREE.Group is registered into the store so the IK solver can run with a *hypothetical* future platform pose, then restore.
+
+## 6a. Running the tests
+
+```bash
+npm test            # one-shot run (CI / pre-push)
+npm run test:watch  # interactive watcher during development
+```
+
+Tests cover the store factory (independence between robots, action behaviour, `subscribeWithSelector` semantics) and the pure IK helpers (`clampJoint`, `lerpAngles`, `easeInOutCubic`, `computeGrabPose`).  37 tests, ~700 ms.
+
+What is **not** tested:
+- The full URDF load path (`urdf-loader` needs a DOM + network — covered by the dev-server smoke test).
+- `solveCCDIK` end-to-end convergence (would require a loaded robot — covered by visual inspection in the demo).
+
+Add tests next to the file they exercise, named `*.test.js` — Vitest picks them up automatically.
 
 ---
 
 ## 7. Roadmap
 
-- [ ] **Multi-robot support** — convert `useStore` into a factory; pass a `storeInstance` prop to each `<RobotArm>` / `<AnimationController>`.
+- [x] **Multi-robot support** — factory + Context done.  See "Multiple robots in the same scene" above.
+- [ ] **Spatial state on refs, not in the store** — joint angles + 3D objects live as plain Three.js mutables; the store keeps only UI-facing state (animState, logs, follow mode).  Cuts re-renders in the hot path.
 - [ ] **Higher-level scene primitives** — a `<RobotOnPlatform>` wrapper extracted from the demo's `RobotBase`.
 - [ ] **Bundled lib build** (`tsup` or `vite build --lib`) so the package is consumable outside Vite.
 - [ ] **Programmatic task API** — `runPickAndPlace({ from, to })` returning a Promise, instead of poking the animState string.

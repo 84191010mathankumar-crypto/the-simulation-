@@ -2,22 +2,34 @@
  * roboclaw — a React + Three.js library for simulating a 6-axis robot arm
  * doing pick-and-place tasks, optionally riding on a mobile platform.
  *
- * Public surface (what an app should import):
+ * Public surface:
  *
  *   import {
+ *     // scene components
  *     RobotArm, AnimationController, WorkObject, WorkingEnvelope,
- *     useStore, JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA,
+ *
+ *     // state
+ *     createRobotStore, RobotStoreProvider, useRobotStore, useRobotStoreApi,
+ *
+ *     // constants
+ *     JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA,
+ *
+ *     // IK math
  *     solveCCDIK, computeGrabPose, getToolPose,
+ *
+ *     // default asset paths
  *     KR210_DEFAULT_URDF, KR210_DEFAULT_PACKAGE_DIR,
- *   } from 'roboclaw'   // or '<repo>/src/lib' until published
+ *   } from 'roboclaw'
  *
- * Everything in `./components`, `./state`, and `./ik` is intentionally
- * exported so power users can reach into internals when they need to.
- * The named exports below are the stable surface.
+ * Multi-robot usage — each <RobotStoreProvider> is an isolated scope.  Either
+ * create stores explicitly:
  *
- * NOTE — v1 ships with a SINGLE-ROBOT singleton store.  When you need
- * multiple arms in the same scene, look at `state/useStore.js` — that
- * file is the one place that needs converting into a factory.
+ *   const armA = createRobotStore()
+ *   const armB = createRobotStore()
+ *   <RobotStoreProvider store={armA}> <RobotArm /> ... </RobotStoreProvider>
+ *   <RobotStoreProvider store={armB}> <RobotArm /> ... </RobotStoreProvider>
+ *
+ * …or for single-robot demos, leave `store` off and one is created lazily.
  */
 
 // Scene components
@@ -28,10 +40,18 @@ export { default as AnimationController } from './components/AnimationController
 export { default as WorkObject, BOX_HALF }  from './components/WorkObject.jsx'
 export { default as WorkingEnvelope }       from './components/WorkingEnvelope.jsx'
 
-// State (the global store)
-export { default as useStore,
-         JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA }
-  from './state/useStore.js'
+// State — factory, provider, hooks
+export {
+  createRobotStore,
+  RobotStoreProvider,
+  useRobotStore,
+  useRobotStoreApi,
+} from './state/store.jsx'
+
+// Constants
+export {
+  JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA,
+} from './state/constants.js'
 
 // Inverse-kinematics primitives
 export {

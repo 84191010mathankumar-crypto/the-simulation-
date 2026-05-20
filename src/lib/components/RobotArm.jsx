@@ -3,7 +3,8 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import URDFLoader from 'urdf-loader'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import useStore, { JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
+import { useRobotStoreApi } from '../state/store.jsx'
+import { JOINT_NAMES, HOME_ANGLES } from '../state/constants.js'
 import { applyAnglesToRobot } from '../ik/ikSolver'
 
 // Default runtime URLs for the bundled KUKA KR210 R2700-2 assets.
@@ -153,7 +154,8 @@ export default function RobotArm({
 }) {
   const { scene } = useThree()
   const robotRef  = useRef(null)
-  const { setRobotLoaded, setRobotRef, addLog } = useStore()
+  const store     = useRobotStoreApi()
+  const { setRobotLoaded, setRobotRef, addLog } = store.getState()
 
   useEffect(() => {
     let cancelled = false
@@ -188,7 +190,7 @@ export default function RobotArm({
           tip.add(gripper)
         }
 
-        useStore.setState({ robotRef: robot })
+        store.setState({ robotRef: robot })
         setRobotLoaded(true)
         setRobotRef(robot)
 
@@ -220,13 +222,13 @@ export default function RobotArm({
   }, [])
 
   useEffect(() => {
-    return useStore.subscribe(
+    return store.subscribe(
       (state) => state.jointAngles,
       (angles) => {
         if (robotRef.current) applyAnglesToRobot(robotRef.current, angles)
-      }
+      },
     )
-  }, [])
+  }, [store])
 
   return null
 }
