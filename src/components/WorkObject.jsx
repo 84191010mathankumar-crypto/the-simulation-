@@ -67,9 +67,9 @@ export default function WorkObject({ objectKey, color }) {
   return (
     <>
       <PivotControls
-        scale={120}                // pixel size (with fixed=true)
+        scale={70}                 // pixel size (with fixed=true)
         fixed
-        lineWidth={3}
+        lineWidth={2}
         depthTest={false}
         anchor={[0, 0, 0]}
         activeAxes={[true, true, true]}
