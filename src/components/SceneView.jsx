@@ -51,17 +51,17 @@ export default function SceneView() {
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
         shadows
         gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
-        onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }}
+        onCreated={({ gl }) => { gl.toneMappingExposure = 0.85 }}
       >
         {/* Soft PCSS shadow filter */}
         <SoftShadows size={28} samples={16} focus={0.6} />
 
         {/* Lighting — bright key + soft fill */}
-        <ambientLight intensity={0.45} />
-        <hemisphereLight args={['#ffffff', '#dde4ef', 0.55]} />
+        <ambientLight intensity={0.35} />
+        <hemisphereLight args={['#ffffff', '#dde4ef', 0.45]} />
         <directionalLight
           position={[6, 9, 5]}
-          intensity={2.2}
+          intensity={1.1}
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0001}
