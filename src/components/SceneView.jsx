@@ -140,25 +140,26 @@ export default function SceneView() {
     <div className="scene-view">
       <Canvas
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
-        shadows                              /* default PCFShadowMap — cheap-ish */
-        dpr={[1, 1.5]}                       /* cap pixel ratio so 4K doesn't render at 2× */
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        shadows
+        gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping }}
+        onCreated={({ gl }) => { gl.toneMappingExposure = 1.0 }}
       >
-        {/* Lighting — hemi + key + fill.  No HDR Environment / no tone
-            mapping; cheap and the orange reads as orange. */}
-        <hemisphereLight args={['#ffffff', '#d6dbe4', 0.65]} />
-        <ambientLight intensity={0.45} />
+        {/* Lighting — neutral cool whites, no warm tint, slightly dimmer
+            so the orange doesn't blow out with NeutralToneMapping. */}
+        <hemisphereLight args={['#f1f4f8', '#cdd2da', 0.40]} />
+        <ambientLight intensity={0.35} />
         <directionalLight
           position={[6, 9, 5]}
-          intensity={1.6}
+          intensity={0.65}
           castShadow
-          shadow-mapSize={[1024, 1024]}      /* 2k → 1k */
-          shadow-bias={-0.0002}
-          shadow-camera-near={0.5}
-          shadow-camera-far={20}
-          shadow-camera-left={-4}
-          shadow-camera-right={4}
-          shadow-camera-top={5}
+          shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0001}
+          shadow-normalBias={0.02}
+          shadow-camera-near={0.1}
+          shadow-camera-far={40}
+          shadow-camera-left={-5}
+          shadow-camera-right={5}
+          shadow-camera-top={6}
           shadow-camera-bottom={-2}
         />
 

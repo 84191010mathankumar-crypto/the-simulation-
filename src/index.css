@@ -3,7 +3,7 @@
 :root {
   /* Warm Claude-style palette */
   --bg:        #faf9f6;   /* warm off-white scene */
-  --panel:     #f7f5f0;   /* slightly creamier panel */
+  --panel:     #ffffff;   /* pure white panel */
   --surface:   #ffffff;   /* raised surfaces */
   --rule:      #ecebe5;   /* hairline dividers */
   --rule-soft: #f1efe9;

@@ -3,7 +3,7 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(ellipse at 50% 0%, #ffffff 0%, #f6f4ee 60%, #ecead9 100%);
+    radial-gradient(ellipse at 50% 0%, #ffffff 0%, #f1f3f6 60%, #dee2e9 100%);
 }
 
 .scene-view canvas {
