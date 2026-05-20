@@ -116,8 +116,8 @@ export default function SceneView() {
 
         <Suspense fallback={null}>
           <RobotArm />
-          <WorkObject objectKey="start" color="#ff6000" />
-          <WorkObject objectKey="end"   color="#3b6fff" />
+          <WorkObject objectKey="start" color="#c15f3c" />
+          <WorkObject objectKey="end"   color="#4a6ea3" />
           <WorkingEnvelope />
           <AnimationController />
         </Suspense>

@@ -8,64 +8,71 @@ function JointBar({ name, value }) {
   const lim = JOINT_LIMITS[name]
   const range = lim.upper - lim.lower
   const pct = ((value - lim.lower) / range) * 100
-  const limitPct = ((0 - lim.lower) / range) * 100
-  const isNearLimit = value < lim.lower + 0.05 || value > lim.upper - 0.05
+  const zeroPct = ((0 - lim.lower) / range) * 100
+  const nearLimit = value < lim.lower + 0.05 || value > lim.upper - 0.05
 
   return (
     <div className="joint-row">
       <span className="joint-name">{name.replace('joint_', 'A')}</span>
       <div className="joint-track">
-        <div className="joint-fill" style={{ width: `${pct}%`, background: isNearLimit ? 'var(--red)' : 'var(--accent-2)' }} />
-        <div className="joint-zero" style={{ left: `${limitPct}%` }} />
+        <div className="joint-fill" style={{ width: `${pct}%` }} />
+        <div className="joint-zero" style={{ left: `${zeroPct}%` }} />
       </div>
-      <span className={`joint-val ${isNearLimit ? 'warn' : ''}`}>
-        {rad2deg(value)}°
-      </span>
+      <span className={`joint-val ${nearLimit ? 'warn' : ''}`}>{rad2deg(value)}°</span>
     </div>
   )
 }
 
-function ObjectCard({ label, obj, color, onSelect, isSelected, mode, onModeChange }) {
-  const fmt = (v) => v.toFixed(3)
-  const p = obj.position
-  const r = obj.rotation
-  const g = obj.grabVector
+function ObjectRow({ label, obj, color, isSelected, onSelect, mode, onModeChange }) {
+  const f3 = (v) => v.toFixed(3)
+  const [p, r, g] = [obj.position, obj.rotation, obj.grabVector]
 
   return (
-    <div className={`obj-card ${isSelected ? 'selected' : ''}`} style={{ '--card-color': color }} onClick={onSelect}>
-      <div className="obj-card-header">
+    <div className={`obj-row ${isSelected ? 'selected' : ''}`} onClick={onSelect}>
+      <div className="obj-row-head">
         <span className="obj-dot" style={{ background: color }} />
         <span className="obj-label">{label}</span>
         {isSelected && (
-          <div className="mode-btns">
-            <button className={mode === 'translate' ? 'active' : ''} onClick={(e) => { e.stopPropagation(); onModeChange('translate') }}>T</button>
-            <button className={mode === 'rotate' ? 'active' : ''} onClick={(e) => { e.stopPropagation(); onModeChange('rotate') }}>R</button>
+          <div className="mode-toggle">
+            <button
+              className={mode === 'translate' ? 'active' : ''}
+              onClick={(e) => { e.stopPropagation(); onModeChange('translate') }}
+            >Move</button>
+            <button
+              className={mode === 'rotate' ? 'active' : ''}
+              onClick={(e) => { e.stopPropagation(); onModeChange('rotate') }}
+            >Rotate</button>
           </div>
         )}
       </div>
-      <table className="obj-table">
-        <tbody>
-          <tr><td className="td-label">Pos</td><td>{fmt(p[0])}</td><td>{fmt(p[1])}</td><td>{fmt(p[2])}</td></tr>
-          <tr><td className="td-label">Rot°</td><td>{rad2deg(r[0])}</td><td>{rad2deg(r[1])}</td><td>{rad2deg(r[2])}</td></tr>
-          <tr><td className="td-label">Grab</td><td>{fmt(g[0])}</td><td>{fmt(g[1])}</td><td>{fmt(g[2])}</td></tr>
-        </tbody>
-      </table>
+      <div className="obj-meta">
+        <span className="obj-meta-label">Pos</span>
+        <span>{f3(p[0])}</span><span>{f3(p[1])}</span><span>{f3(p[2])}</span>
+        <span className="obj-meta-label">Rot</span>
+        <span>{rad2deg(r[0])}°</span><span>{rad2deg(r[1])}°</span><span>{rad2deg(r[2])}°</span>
+        <span className="obj-meta-label">Grab</span>
+        <span>{f3(g[0])}</span><span>{f3(g[1])}</span><span>{f3(g[2])}</span>
+      </div>
     </div>
   )
 }
 
 function LogEntry({ entry }) {
-  const colors = { info: 'var(--muted)', ok: 'var(--green)', warn: 'var(--accent)', error: 'var(--red)' }
-  const ts = (entry.ts / 1000).toFixed(2)
+  const colors = {
+    info:  'var(--ink-4)',
+    ok:    'var(--green)',
+    warn:  'var(--accent)',
+    error: 'var(--red)',
+  }
   return (
     <div className="log-entry">
-      <span className="log-ts">{ts}s</span>
+      <span className="log-ts">{(entry.ts / 1000).toFixed(2)}s</span>
       <span className="log-bullet" style={{ color: colors[entry.level] }}>●</span>
       <span className="log-msg">{entry.msg}</span>
       {entry.extra && (
         <div className="log-extra">
           {Object.entries(entry.extra).map(([k, v]) => (
-            <span key={k}>{k}: <b>{typeof v === 'number' ? rad2deg(v) + '°' : v}</b></span>
+            <span key={k}>{k} <b>{typeof v === 'number' ? rad2deg(v) + '°' : v}</b></span>
           ))}
         </div>
       )}
@@ -84,86 +91,91 @@ export default function ControlPanel() {
   } = useStore()
 
   const logRef = useRef(null)
-
-  // Auto-scroll log to top (newest first)
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = 0
   }, [logs.length])
 
-  const canExecute = robotLoaded && (animState === 'idle')
+  const canExecute = robotLoaded && animState === 'idle'
+  const isRunning  = animState !== 'idle'
 
-  function handleExecute() {
+  const handleExecute = () => {
     if (!canExecute) return
-    addLog('info', 'Execute: moving arm to START position…')
+    addLog('info', 'Moving to start position…')
     setAnimState('moving_to_start')
   }
-
-  function handleReset() {
+  const handleReset = () => {
     resetToHome()
-    addLog('info', 'Reset to home position')
+    addLog('info', 'Returned to home')
   }
+
+  const stateLabel = animState === 'idle' ? 'Idle' : animState.replace(/_/g, ' ')
 
   return (
     <aside className="control-panel">
       {/* Header */}
       <div className="panel-header">
-        <div className="panel-logo">R</div>
-        <div className="panel-title-wrap">
-          <span className="panel-title">KUKA KR210 R2700-2</span>
-          <span className="panel-subtitle">Pick &amp; place demo · 6-DOF</span>
+        <div className="panel-header-top">
+          <span className="panel-title">KUKA KR210</span>
+          <span className={`status-pill ${robotLoaded ? '' : 'offline'}`}>
+            <span className="status-dot" />
+            {robotLoaded ? 'Ready' : 'Loading'}
+          </span>
         </div>
-        <span className={`status-pill ${robotLoaded ? '' : 'offline'}`}>
-          <span className="status-dot" />
-          {robotLoaded ? 'Ready' : 'Loading'}
-        </span>
+        <span className="panel-subtitle">R2700-2 · 6-axis pick & place</span>
       </div>
 
-      {/* Objects */}
+      {/* Work objects */}
       <section className="panel-section">
-        <div className="section-title">WORK OBJECTS</div>
-        <ObjectCard
-          label="START"
-          obj={startObject}
-          color="#ff6000"
-          isSelected={selectedObject === 'start'}
-          onSelect={() => setSelectedObject('start')}
-          mode={transformMode}
-          onModeChange={setTransformMode}
-        />
-        <ObjectCard
-          label="END"
-          obj={endObject}
-          color="#3b6fff"
-          isSelected={selectedObject === 'end'}
-          onSelect={() => setSelectedObject('end')}
-          mode={transformMode}
-          onModeChange={setTransformMode}
-        />
+        <div className="section-title">Targets</div>
+        <div className="obj-list">
+          <ObjectRow
+            label="Start"
+            obj={startObject}
+            color="var(--accent)"
+            isSelected={selectedObject === 'start'}
+            onSelect={() => setSelectedObject('start')}
+            mode={transformMode}
+            onModeChange={setTransformMode}
+          />
+          <ObjectRow
+            label="End"
+            obj={endObject}
+            color="var(--blue)"
+            isSelected={selectedObject === 'end'}
+            onSelect={() => setSelectedObject('end')}
+            mode={transformMode}
+            onModeChange={setTransformMode}
+          />
+        </div>
       </section>
 
-      {/* Execute */}
+      {/* Run */}
       <section className="panel-section">
-        <div className="section-title">CONTROL</div>
         <div className="ctrl-row">
-          <button className={`btn-execute ${canExecute ? '' : 'disabled'}`} onClick={handleExecute}>
-            {animState === 'idle' ? '▶ EXECUTE' : `⟳ ${animState.replace(/_/g, ' ').toUpperCase()}`}
+          <button
+            className={`btn-execute ${canExecute ? '' : 'disabled'}`}
+            onClick={handleExecute}
+          >
+            {isRunning ? 'Running…' : 'Run sequence'}
           </button>
-          <button className="btn-reset" onClick={handleReset} disabled={animState !== 'idle'}>⏮ HOME</button>
+          <button
+            className="btn-reset"
+            onClick={handleReset}
+            disabled={animState !== 'idle'}
+          >Home</button>
         </div>
-        <div className="anim-bar-wrap">
-          <div className="anim-bar-label">{animState.replace(/_/g, ' ')}</div>
-          <div className="anim-bar-track">
-            <div
-              className="anim-bar-fill"
-              style={{ width: `${animProgress * 100}%` }}
-            />
-          </div>
+        <div className="anim-status">
+          <span className="anim-status-label">{stateLabel}</span>
+          <span className="anim-status-pct">{(animProgress * 100).toFixed(0)}%</span>
+        </div>
+        <div className="anim-bar-track">
+          <div className="anim-bar-fill" style={{ width: `${animProgress * 100}%` }} />
         </div>
       </section>
 
       {/* Joints */}
       <section className="panel-section">
-        <div className="section-title">JOINT STATES (deg)</div>
+        <div className="section-title">Joints</div>
         <div className="joints-grid">
           {JOINT_NAMES.map((n) => (
             <JointBar key={n} name={n} value={jointAngles[n] ?? 0} />
@@ -174,8 +186,8 @@ export default function ControlPanel() {
       {/* Log */}
       <section className="panel-section log-section">
         <div className="section-title">
-          LOG
-          <button className="btn-clear" onClick={clearLogs}>CLEAR</button>
+          Activity
+          <button className="btn-clear" onClick={clearLogs}>Clear</button>
         </div>
         <div className="log-scroll" ref={logRef}>
           {logs.length === 0 && <div className="log-empty">No events yet.</div>}
