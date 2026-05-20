@@ -7,8 +7,8 @@ import {
   GizmoHelper,
   GizmoViewport,
   ContactShadows,
-  SoftShadows,
 } from '@react-three/drei'
+import * as THREE from 'three'
 import RobotArm from './RobotArm'
 import WorkObject from './WorkObject'
 import WorkingEnvelope from './WorkingEnvelope'
@@ -51,11 +51,11 @@ export default function SceneView() {
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
         shadows
         gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
-        onCreated={({ gl }) => { gl.toneMappingExposure = 0.85 }}
+        onCreated={({ gl }) => {
+          gl.toneMappingExposure = 0.85
+          gl.shadowMap.type = THREE.PCFSoftShadowMap
+        }}
       >
-        {/* Soft PCSS shadow filter */}
-        <SoftShadows size={28} samples={16} focus={0.6} />
-
         {/* Lighting — bright key + soft fill */}
         <ambientLight intensity={0.35} />
         <hemisphereLight args={['#ffffff', '#dde4ef', 0.45]} />
