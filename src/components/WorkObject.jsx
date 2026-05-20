@@ -67,12 +67,13 @@ export default function WorkObject({ objectKey, color }) {
   return (
     <>
       <PivotControls
-        scale={70}                 // pixel size (with fixed=true)
+        scale={48}                 // pixel size (with fixed=true)
         fixed
-        lineWidth={2}
+        lineWidth={1.6}
         depthTest={false}
         anchor={[0, 0, 0]}
         activeAxes={[true, true, true]}
+        disableSliders            // removes the plane (square) handles
         annotations
         annotationsClass="pivot-annot"
         matrix={initialMatrix}
