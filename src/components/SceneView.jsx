@@ -142,15 +142,14 @@ export default function SceneView() {
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
         shadows
         gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping }}
-        onCreated={({ gl }) => { gl.toneMappingExposure = 1.0 }}
+        onCreated={({ gl }) => { gl.toneMappingExposure = 1.15 }}
       >
-        {/* Lighting — neutral cool whites, no warm tint, slightly dimmer
-            so the orange doesn't blow out with NeutralToneMapping. */}
-        <hemisphereLight args={['#f1f4f8', '#cdd2da', 0.40]} />
-        <ambientLight intensity={0.35} />
+        {/* Lighting — neutral cool whites, no warm tint */}
+        <hemisphereLight args={['#f4f6fa', '#d0d5dd', 0.80]} />
+        <ambientLight intensity={0.65} />
         <directionalLight
           position={[6, 9, 5]}
-          intensity={0.65}
+          intensity={1.4}
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0001}
