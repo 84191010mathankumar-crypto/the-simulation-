@@ -59,6 +59,7 @@ export default function ControlPanel() {
   const {
     jointAngles, robotLoaded, animState, animProgress,
     followTarget, setFollowTarget,
+    mobileMode, setMobileMode,
     addLog, clearLogs, logs,
     setAnimState, resetToHome,
   } = useStore()
@@ -136,6 +137,20 @@ export default function ControlPanel() {
             Follow end
           </button>
         </div>
+
+        <label className="toggle-row" aria-disabled={isRunning}>
+          <input
+            type="checkbox"
+            checked={mobileMode}
+            disabled={isRunning}
+            onChange={(e) => {
+              setMobileMode(e.target.checked)
+              addLog('info', e.target.checked ? 'Mobile platform enabled' : 'Mobile platform disabled')
+            }}
+          />
+          <span className="toggle-switch" />
+          <span className="toggle-label">Mobile platform</span>
+        </label>
 
         <div className="prog">
           <span className="prog-state">{stateLabel}</span>

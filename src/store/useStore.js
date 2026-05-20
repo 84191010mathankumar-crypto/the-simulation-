@@ -71,6 +71,16 @@ const useStore = create((set, get) => ({
   // null | 'start' | 'end'
   followTarget: null,
 
+  // ── Mobile platform ──────────────────────────────────────────────
+  // When false, the robot is bolted to a static pedestal at the origin.
+  // When true, it rides on a movable AGV-style platform whose pose the
+  // user can drag in 3D — extending the workspace anywhere on the floor.
+  mobileMode: false,
+  platformPose: {
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+  },
+
   // ── Log ──────────────────────────────────────────────────────────
   logs: [],
 
@@ -91,6 +101,8 @@ const useStore = create((set, get) => ({
 
   setAnimState: (state) => set({ animState: state }),
   setFollowTarget: (which) => set({ followTarget: which }),
+  setMobileMode: (v) => set({ mobileMode: v }),
+  setPlatformPose: (pose) => set({ platformPose: pose }),
   setAnimProgress: (p)  => set({ animProgress: p }),
   setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),
 

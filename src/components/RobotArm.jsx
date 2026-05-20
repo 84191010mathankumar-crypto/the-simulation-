@@ -102,7 +102,7 @@ function buildGripper() {
   return g
 }
 
-export default function RobotArm() {
+export default function RobotArm({ parentRef, mountY = 0.05 }) {
   const { scene } = useThree()
   const robotRef  = useRef(null)
   const { setRobotLoaded, setRobotRef, addLog } = useStore()
@@ -132,11 +132,12 @@ export default function RobotArm() {
 
         // URDF is ROS-convention (Z-up); Three.js scene is Y-up.
         // Rotate -90° about X so the base sits flat on the ground plane.
-        // Raise slightly so the base mounts on top of the pedestal plate.
-        robot.position.set(0, 0.05, 0)
+        // mountY raises it onto the top of the pedestal / AGV.
+        robot.position.set(0, mountY, 0)
         robot.rotation.set(-Math.PI / 2, 0, 0)
 
-        scene.add(robot)
+        const parent = parentRef?.current || scene
+        parent.add(robot)
         robotRef.current = robot
         applyAnglesToRobot(robot, HOME_ANGLES)
 
@@ -173,7 +174,9 @@ export default function RobotArm() {
 
     return () => {
       cancelled = true
-      if (robotRef.current) scene.remove(robotRef.current)
+      if (robotRef.current && robotRef.current.parent) {
+        robotRef.current.parent.remove(robotRef.current)
+      }
     }
   }, [])
 
