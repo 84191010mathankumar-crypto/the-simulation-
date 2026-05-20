@@ -99,26 +99,19 @@ function _solveSegment(store, target, currentAngles) {
 
   const obj = target === 'start' ? startObject : endObject
 
-  // Grab geometry:
-  //   face centre   = object centre + grabDir * BOX_HALF
-  //   flange target = face centre   + grabDir * GRIPPER_REACH
-  // so the gripper finger tips land exactly on the face.
-  const BOX_HALF       = 0.075
-  const GRIPPER_REACH  = 0.22
-  const approachDist   = BOX_HALF + GRIPPER_REACH
-
-  // computeGrabPose returns { position: THREE.Vector3, quaternion: THREE.Quaternion }
-  const { position: targetVec, quaternion: grabQuat } =
-    computeGrabPose(obj.position, obj.rotation, obj.grabVector, approachDist)
+  // Grab geometry — we want the gripper's pinch point to land exactly on
+  // the centre of the face that the grab vector points out of, and the
+  // gripper to approach perpendicular to that face (tool axis = -grabDir).
+  const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
 
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
-    X: targetVec.x.toFixed(3),
-    Y: targetVec.y.toFixed(3),
-    Z: targetVec.z.toFixed(3),
+    X: faceCenter.x.toFixed(3),
+    Y: faceCenter.y.toFixed(3),
+    Z: faceCenter.z.toFixed(3),
   })
 
-  // Solve IK — mutates robot joints during solving, then restores on failure
-  const solved = solveCCDIK(robotRef, targetVec, grabQuat, 120, 0.005)
+  // Solve orientation-aware IK
+  const solved = solveCCDIK(robotRef, faceCenter, toolZ, 160, 0.005)
 
   if (solved) {
     const clamped = clampAllJoints(solved)

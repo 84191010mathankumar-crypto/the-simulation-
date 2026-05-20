@@ -152,6 +152,12 @@ export default function RobotArm() {
         setRobotLoaded(true)
         setRobotRef(robot)
 
+        // Expose for devtools/eval poking (handy when iterating on IK).
+        if (typeof window !== 'undefined' && import.meta.env.DEV) {
+          window.__robot = robot
+          window.__THREE = THREE
+        }
+
         addLog('ok',   'KUKA KR210 R2700-2 loaded')
         addLog('info', 'Joints', Object.fromEntries(
           JOINT_NAMES.map((n) => [n, robot.joints[n] ? '✓' : '✗'])

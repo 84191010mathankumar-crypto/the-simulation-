@@ -1,16 +1,24 @@
 /**
- * IK Solver for KUKA KR210 R2700-2
+ * IK Solver for KUKA KR210 R2700-2 with parallel-jaw gripper.
  *
- * Uses the closed-chain-ik library (gkjohnson) which implements damped
- * least-squares (Jacobian pseudo-inverse) with joint limits.
+ * Orientation-aware Cyclic Coordinate Descent with multi-restart.
  *
- * This module bridges the urdf-loader robot scene graph with the IK solver
- * and provides a clean async interface for the animation system.
+ * The tool frame is the URDF "tool0" link.  Its local +Z is the tool axis;
+ * the gripper extends along that +Z.  The pinch point (between the finger
+ * pads) sits at TOOL_TIP_OFFSET = (0, 0, PINCH_Z) in tool0-local.
+ *
+ * IK is solved so that:
+ *   pinch_point_world  →  targetPos
+ *   tool0_localZ_world →  targetZ        (gripper points at the face)
  */
 import * as THREE from 'three'
 import { JOINT_LIMITS, JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
 
-// ─── Clamp helper ─────────────────────────────────────────────────────────
+// Distance from tool0 origin to the pinch centre between the two finger pads
+export const PINCH_Z = 0.18
+const TOOL_TIP_OFFSET = new THREE.Vector3(0, 0, PINCH_Z)
+
+// ─── Clamp helpers ────────────────────────────────────────────────────────
 export function clampJoint(name, value) {
   const lim = JOINT_LIMITS[name]
   if (!lim) return value
@@ -19,13 +27,11 @@ export function clampJoint(name, value) {
 
 export function clampAllJoints(angles) {
   const out = {}
-  for (const name of JOINT_NAMES) {
-    out[name] = clampJoint(name, angles[name] ?? 0)
-  }
+  for (const name of JOINT_NAMES) out[name] = clampJoint(name, angles[name] ?? 0)
   return out
 }
 
-// ─── Apply angles to URDF robot ───────────────────────────────────────────
+// ─── Apply / read angles ──────────────────────────────────────────────────
 export function applyAnglesToRobot(robot, angles) {
   if (!robot) return
   for (const name of JOINT_NAMES) {
@@ -34,7 +40,6 @@ export function applyAnglesToRobot(robot, angles) {
   }
 }
 
-// ─── Read angles from URDF robot ──────────────────────────────────────────
 export function readAnglesFromRobot(robot) {
   if (!robot) return {}
   const out = {}
@@ -45,107 +50,115 @@ export function readAnglesFromRobot(robot) {
   return out
 }
 
-// ─── Get world-space end-effector (flange) pose ───────────────────────────
+// ─── Tool frame pose (pinch + axis) ───────────────────────────────────────
+function getToolLink(robot) {
+  return robot.links?.tool0 || robot.links?.flange || robot.links?.link_6 || null
+}
+
+export function getToolPose(robot) {
+  const tool = getToolLink(robot)
+  if (!tool) return null
+  const pos = new THREE.Vector3();    tool.getWorldPosition(pos)
+  const quat = new THREE.Quaternion();tool.getWorldQuaternion(quat)
+  const Zw = new THREE.Vector3(0, 0, 1).applyQuaternion(quat)
+  const pinch = pos.clone().addScaledVector(Zw, PINCH_Z)
+  return { pos, quat, Zw, pinch }
+}
+
+// Back-compat — used by some callers; returns flange world pose.
 export function getEndEffectorPose(robot) {
-  if (!robot) return null
-  const flange = robot.links['flange'] || robot.links['link_6']
-  if (!flange) return null
-  const pos = new THREE.Vector3()
-  const quat = new THREE.Quaternion()
-  flange.getWorldPosition(pos)
-  flange.getWorldQuaternion(quat)
-  return { position: pos, quaternion: quat }
+  const link = robot.links?.flange || robot.links?.link_6
+  if (!link) return null
+  const position = new THREE.Vector3()
+  const quaternion = new THREE.Quaternion()
+  link.getWorldPosition(position)
+  link.getWorldQuaternion(quaternion)
+  return { position, quaternion }
 }
 
-// ─── Approach pose: offset along grab vector ──────────────────────────────
+// ─── Grab pose computation ────────────────────────────────────────────────
 /**
- * Given an object's world position + Euler rotation + grab vector (local),
- * compute:
- *   target = object position + (rotation * grabVector * approachDist)
- *   targetQuat = rotation aligned to grab vector
+ * Given the box centre, rotation and outward grab direction, return
+ *   faceCenter   – the centre of the box face we are gripping (target for pinch)
+ *   toolZ        – desired world direction of the tool axis (gripper +Z),
+ *                  which is INWARD (-grabDir) so the fingers point AT the face
+ *   grabDirWorld – the outward grab direction in world space
  */
-export function computeGrabPose(objectPos, objectEuler, grabVecLocal, approachDist = 0.05) {
+export function computeGrabPose(objectPos, objectEuler, grabVecLocal, boxHalf = 0.075) {
   const pos = new THREE.Vector3(...objectPos)
-  const rot = new THREE.Euler(...objectEuler, 'XYZ')
-  const rotMat = new THREE.Matrix4().makeRotationFromEuler(rot)
+  const eul = new THREE.Euler(objectEuler[0], objectEuler[1], objectEuler[2], 'XYZ')
+  const rotMat = new THREE.Matrix4().makeRotationFromEuler(eul)
 
-  // Grab vector in world space
-  const grabDir = new THREE.Vector3(...grabVecLocal).normalize()
-  const grabDirWorld = grabDir.clone().applyMatrix4(rotMat)
+  const grabLocal  = new THREE.Vector3(...grabVecLocal).normalize()
+  const grabDirWorld = grabLocal.clone().applyMatrix4(rotMat).normalize()
 
-  // Tool tip should arrive FROM the grab direction (offset backward)
-  const approachPos = pos.clone().addScaledVector(grabDirWorld, approachDist)
+  const faceCenter = pos.clone().addScaledVector(grabDirWorld, boxHalf)
+  const toolZ      = grabDirWorld.clone().negate()   // gripper points at face
 
-  // Quaternion: z-axis of tool points along grab direction
-  const q = new THREE.Quaternion()
-  q.setFromUnitVectors(new THREE.Vector3(0, 0, -1), grabDirWorld.clone().negate())
-
-  return { position: approachPos, quaternion: q }
+  // Legacy fields kept for any caller still expecting { position, quaternion }
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    toolZ,
+  )
+  return { faceCenter, toolZ, grabDirWorld, position: faceCenter, quaternion }
 }
 
-// ─── CCD IK solver ────────────────────────────────────────────────────────
+// ─── Orientation-aware CCD ────────────────────────────────────────────────
 /**
- * Cyclic Coordinate Descent IK with multi-restart.
- *
- * Each restart begins from a perturbed seed so the solver can escape local
- * minima. Returns the best solution found, or null if unreachable.
+ * Multi-restart CCD that converges both pinch-point position AND tool-axis
+ * direction.  Returns the best joint solution or null if unreachable.
  */
-export function solveCCDIK(robot, targetPos, targetQuat, maxIter = 120, tolerance = 0.005) {
+export function solveCCDIK(robot, targetPos, targetZ, maxIter = 160, tolerance = 0.005) {
   if (!robot) return null
-
-  // Validate target
   if (!isFinite(targetPos.x) || !isFinite(targetPos.y) || !isFinite(targetPos.z)) {
     console.warn('solveCCDIK: invalid targetPos', targetPos)
     return null
   }
 
-  const joints = JOINT_NAMES.map((name) => robot.joints[name]).filter(Boolean)
+  const joints = JOINT_NAMES.map((n) => robot.joints[n]).filter(Boolean)
   if (joints.length === 0) return null
 
   const savedAngles = readAnglesFromRobot(robot)
 
-  // Quick reachability check: is target within arm radius?
-  const dist2D = Math.sqrt(targetPos.x ** 2 + targetPos.z ** 2)
-  if (dist2D > 2.8 || targetPos.y < -0.8 || targetPos.y > 2.6) {
-    console.warn('solveCCDIK: target likely out of reach', targetPos)
-    // still try — don't abort early
-  }
+  const tZ = targetZ.clone().normalize()
 
-  let bestAngles = null
-  let bestDist   = Infinity
-
-  // Multiple restart seeds: current pose, home, and two perturbed variants
+  // Restart seeds — wide variety so we escape local minima
   const seeds = [
     savedAngles,
     { ...HOME_ANGLES },
-    { ...HOME_ANGLES, joint_1: -Math.PI / 4, joint_2: -1.2, joint_3: 1.8 },
-    { ...HOME_ANGLES, joint_1:  Math.PI / 4, joint_2: -1.2, joint_3: 1.8 },
+    { ...HOME_ANGLES, joint_1: -Math.PI / 4, joint_2: -1.2, joint_3: 1.6 },
+    { ...HOME_ANGLES, joint_1:  Math.PI / 4, joint_2: -1.2, joint_3: 1.6 },
+    { ...HOME_ANGLES, joint_1:  Math.PI,     joint_2: -1.0, joint_3: 1.4 },
+    { ...HOME_ANGLES, joint_1: -Math.PI / 2, joint_2: -1.8, joint_3: 2.0, joint_5: 1.2 },
   ]
+
+  let bestAngles = null
+  let bestScore  = Infinity
 
   for (const seed of seeds) {
     applyAnglesToRobot(robot, seed)
-    const result = _runCCD(robot, joints, targetPos, maxIter, tolerance)
-    const efPose = getEndEffectorPose(robot)
-    if (!efPose) continue
-    const d = efPose.position.distanceTo(targetPos)
-    if (d < bestDist) {
-      bestDist   = d
+    _runCCD(robot, joints, targetPos, tZ, maxIter, tolerance)
+    const pose = getToolPose(robot)
+    if (!pose) continue
+    const dPos = pose.pinch.distanceTo(targetPos)
+    const dOri = Math.acos(Math.max(-1, Math.min(1, pose.Zw.dot(tZ))))   // 0..π
+    // Combined score: 1 mm position error ≈ 1° orientation error
+    const score = dPos + dOri * 0.06
+    if (score < bestScore) {
+      bestScore = score
       bestAngles = readAnglesFromRobot(robot)
     }
-    if (d <= tolerance) break   // good enough, stop early
+    if (dPos < tolerance && dOri < 0.02) break
   }
 
-  // Restore saved angles (animation will interpolate to solution)
+  // Restore — animation will lerp from current pose
   applyAnglesToRobot(robot, savedAngles)
 
-  if (bestDist > tolerance * 20) {
-    // Too far — give up
-    return null
-  }
+  if (bestScore > tolerance * 30) return null
   return bestAngles
 }
 
-function _runCCD(robot, joints, targetPos, maxIter, tolerance) {
+function _runCCD(robot, joints, targetPos, targetZ, maxIter, tolerance) {
   for (let iter = 0; iter < maxIter; iter++) {
     let moved = false
 
@@ -154,62 +167,86 @@ function _runCCD(robot, joints, targetPos, maxIter, tolerance) {
       const joint = joints[j]
       const jName = JOINT_NAMES[j]
 
-      const efPose = getEndEffectorPose(robot)
-      if (!efPose) continue
+      const pose = getToolPose(robot)
+      if (!pose) continue
+      const { pinch, Zw } = pose
 
-      const ee = efPose.position
-      if (ee.distanceTo(targetPos) < tolerance) return true
+      // Convergence
+      const posErr = pinch.distanceTo(targetPos)
+      const oriErr = Math.acos(Math.max(-1, Math.min(1, Zw.dot(targetZ))))
+      if (posErr < tolerance && oriErr < 0.02) return true
 
-      // Joint pivot in world space
-      const pivot = new THREE.Vector3()
-      joint.getWorldPosition(pivot)
+      // Joint pivot + axis in world
+      const pivot = new THREE.Vector3(); joint.getWorldPosition(pivot)
+      const jQuat = new THREE.Quaternion(); joint.getWorldQuaternion(jQuat)
+      const axisW = new THREE.Vector3(0, 0, 1).applyQuaternion(jQuat)
 
-      // Joint rotation axis in world space (all KUKA joints rotate about local Z)
-      const jointQuat = new THREE.Quaternion()
-      joint.getWorldQuaternion(jointQuat)
-      const axisWorld = new THREE.Vector3(0, 0, 1).applyQuaternion(jointQuat)
+      // ── Position-correcting rotation about axisW ──
+      let posDelta = 0
+      {
+        const toEE  = pinch.clone().sub(pivot)
+        const toTgt = targetPos.clone().sub(pivot)
+        toEE.addScaledVector(axisW, -toEE.dot(axisW))
+        toTgt.addScaledVector(axisW, -toTgt.dot(axisW))
+        const lA = toEE.length(), lB = toTgt.length()
+        if (lA > 1e-6 && lB > 1e-6) {
+          toEE.divideScalar(lA); toTgt.divideScalar(lB)
+          const cross = toEE.clone().cross(toTgt)
+          const dot = Math.max(-1, Math.min(1, toEE.dot(toTgt)))
+          posDelta = Math.acos(dot)
+          if (cross.dot(axisW) < 0) posDelta = -posDelta
+        }
+      }
 
-      // Project EE and target onto the plane perpendicular to the joint axis
-      const toEE  = ee.clone().sub(pivot)
-      const toTgt = targetPos.clone().sub(pivot)
+      // ── Orientation-correcting rotation (align Zw to targetZ) ──
+      let oriDelta = 0
+      {
+        const a = Zw.clone(), b = targetZ.clone()
+        a.addScaledVector(axisW, -a.dot(axisW))
+        b.addScaledVector(axisW, -b.dot(axisW))
+        const lA = a.length(), lB = b.length()
+        if (lA > 1e-6 && lB > 1e-6) {
+          a.divideScalar(lA); b.divideScalar(lB)
+          const cross = a.clone().cross(b)
+          const dot = Math.max(-1, Math.min(1, a.dot(b)))
+          oriDelta = Math.acos(dot)
+          if (cross.dot(axisW) < 0) oriDelta = -oriDelta
+        }
+      }
 
-      // Remove axis component (project onto rotation plane)
-      toEE.addScaledVector(axisWorld, -toEE.dot(axisWorld))
-      toTgt.addScaledVector(axisWorld, -toTgt.dot(axisWorld))
+      // Weighted blend:
+      //   base joints (1-3) → mostly drive position
+      //   wrist joints (4-6) → mostly drive orientation
+      const wOri = j >= 3 ? 0.80 : 0.12
 
-      const lenEE  = toEE.length()
-      const lenTgt = toTgt.length()
-      if (lenEE < 1e-6 || lenTgt < 1e-6) continue
+      // Damp by current error so we don't overshoot when nearly converged
+      const posScale = Math.min(1.0, posErr / 0.05)
+      const oriScale = Math.min(1.0, oriErr / 0.4)
+      const delta = (1 - wOri) * posDelta * posScale + wOri * oriDelta * oriScale
 
-      toEE.divideScalar(lenEE)
-      toTgt.divideScalar(lenTgt)
-
-      // Signed angle from toEE → toTgt around axisWorld
-      const cross = toEE.clone().cross(toTgt)
-      const dot   = Math.max(-1, Math.min(1, toEE.dot(toTgt)))
-      let   delta = Math.acos(dot)
-      if (cross.dot(axisWorld) < 0) delta = -delta
-
-      // Clamp and apply
-      const prev     = joint.angle
-      const next     = clampJoint(jName, prev + delta)
-      if (Math.abs(next - prev) > 1e-6) {
+      const prev = joint.angle
+      const next = clampJoint(jName, prev + delta)
+      if (Math.abs(next - prev) > 1e-7) {
         robot.setJointValue(jName, next)
         moved = true
       }
     }
 
-    if (!moved) break  // converged — no joint moved this sweep
+    if (!moved) break
   }
   return false
 }
 
-// ─── Solve IK (CCD-based, respects joint limits) ──────────────────────────
+// ─── Back-compat shim ─────────────────────────────────────────────────────
 export function solveIK(robot, _unused, targetPos, targetQuat) {
-  return solveCCDIK(robot, targetPos, targetQuat)
+  // Default tool axis to -Y world (downward grab) if no quaternion provided
+  const tZ = targetQuat
+    ? new THREE.Vector3(0, 0, 1).applyQuaternion(targetQuat)
+    : new THREE.Vector3(0, -1, 0)
+  return solveCCDIK(robot, targetPos, tZ)
 }
 
-// ─── Interpolate between two angle sets ───────────────────────────────────
+// ─── Interpolation helpers ────────────────────────────────────────────────
 export function lerpAngles(a, b, t) {
   const out = {}
   for (const name of JOINT_NAMES) {
@@ -218,7 +255,6 @@ export function lerpAngles(a, b, t) {
   return out
 }
 
-// ─── Ease function ────────────────────────────────────────────────────────
 export function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
 }
