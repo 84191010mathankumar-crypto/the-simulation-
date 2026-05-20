@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import useStore from '../store/useStore'
 
 const BOX_SIZE = [0.15, 0.15, 0.15]
+export const BOX_HALF = BOX_SIZE[0] / 2
 
 /**
  * Renders a work object (start or end position) as a wireframe box with:
@@ -34,12 +35,19 @@ export default function WorkObject({ objectKey, color }) {
     setObj({ position: [p.x, p.y, p.z], rotation: [r.x, r.y, r.z] })
   }, [setObj])
 
-  // Build arrow geometry for grab direction (world-space, from obj center)
+  // Build arrow geometry for grab direction.
+  // The grab POINT is on the centre of one face of the box (offset from the
+  // box centre along the grab vector by half the box size). The arrow starts
+  // at that face centre and points outward — that's where the gripper docks.
   const { arrowDir, arrowOrigin, arrowLength } = useMemo(() => {
-    const dir    = new THREE.Vector3(...obj.grabVector).normalize()
-    const origin = new THREE.Vector3(...obj.position)
-    return { arrowDir: dir, arrowOrigin: origin, arrowLength: 0.22 }
-  }, [obj.position, obj.grabVector])
+    const dirLocal = new THREE.Vector3(...obj.grabVector).normalize()
+    const rotM     = new THREE.Matrix4().makeRotationFromEuler(
+      new THREE.Euler(obj.rotation[0], obj.rotation[1], obj.rotation[2], 'XYZ')
+    )
+    const dirWorld = dirLocal.clone().applyMatrix4(rotM)
+    const origin   = new THREE.Vector3(...obj.position).addScaledVector(dirWorld, BOX_HALF)
+    return { arrowDir: dirWorld, arrowOrigin: origin, arrowLength: 0.18 }
+  }, [obj.position, obj.rotation, obj.grabVector])
 
   // Stable ArrowHelper object — update in place when position/direction changes
   const arrowHelper = useMemo(() => {

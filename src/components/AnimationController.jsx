@@ -99,9 +99,17 @@ function _solveSegment(store, target, currentAngles) {
 
   const obj = target === 'start' ? startObject : endObject
 
+  // Grab geometry:
+  //   face centre   = object centre + grabDir * BOX_HALF
+  //   flange target = face centre   + grabDir * GRIPPER_REACH
+  // so the gripper finger tips land exactly on the face.
+  const BOX_HALF       = 0.075
+  const GRIPPER_REACH  = 0.22
+  const approachDist   = BOX_HALF + GRIPPER_REACH
+
   // computeGrabPose returns { position: THREE.Vector3, quaternion: THREE.Quaternion }
   const { position: targetVec, quaternion: grabQuat } =
-    computeGrabPose(obj.position, obj.rotation, obj.grabVector, 0.0)
+    computeGrabPose(obj.position, obj.rotation, obj.grabVector, approachDist)
 
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
     X: targetVec.x.toFixed(3),
