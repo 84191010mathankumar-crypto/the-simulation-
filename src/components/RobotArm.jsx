@@ -5,51 +5,54 @@ import URDFLoader from 'urdf-loader'
 import useStore, { JOINT_NAMES, HOME_ANGLES } from '../store/useStore'
 import { applyAnglesToRobot } from '../utils/ikSolver'
 
-/**
- * Loads the KUKA KR210 R2700-2 URDF and adds it to the scene.
- * The robot mesh material is a metallic grey with edge highlights.
- */
+// Real KUKA colour scheme:
+//   base / link_1–3  → KUKA orange
+//   link_4–6 (wrist) → anthracite grey
+//   base_link        → dark charcoal (pedestal)
+const MATERIALS = {
+  orange:     () => new THREE.MeshStandardMaterial({ color: 0xff6000, metalness: 0.30, roughness: 0.50 }),
+  anthracite: () => new THREE.MeshStandardMaterial({ color: 0x2b2d31, metalness: 0.55, roughness: 0.40 }),
+  charcoal:   () => new THREE.MeshStandardMaterial({ color: 0x1a1c1f, metalness: 0.60, roughness: 0.35 }),
+}
+
+function meshMaterial(path) {
+  const file = path.split('/').pop().replace('.stl', '').toLowerCase()
+  if (file === 'base_link')                          return MATERIALS.charcoal()
+  if (file === 'link_4' || file === 'link_5' || file === 'link_6') return MATERIALS.anthracite()
+  return MATERIALS.orange()   // link_1, link_2, link_3
+}
+
+function applyMaterials(obj, path) {
+  if (!obj) return
+  const mat = meshMaterial(path)
+  obj.traverse((child) => {
+    if (!child.isMesh) return
+    child.material      = mat
+    child.castShadow    = true
+    child.receiveShadow = true
+  })
+}
+
 export default function RobotArm() {
-  const { scene, gl } = useThree()
-  const robotRef = useRef(null)
-  const { setRobotLoaded, setRobotRef, jointAngles, addLog } = useStore()
+  const { scene } = useThree()
+  const robotRef  = useRef(null)
+  const { setRobotLoaded, setRobotRef, addLog } = useStore()
 
   useEffect(() => {
     let cancelled = false
-    const loader = new URDFLoader()
+    const loader  = new URDFLoader()
+    loader.packages = { robot: '/robot' }
 
-    // Tell urdf-loader how to resolve package:// URLs
-    loader.packages = {
-      robot: '/robot',
-    }
-
-    // Use THREE STLLoader for .stl meshes
+    // urdf-loader ALWAYS overwrites mesh.material inside the done() callback:
+    //   done(obj, err) → obj.material = new MeshPhongMaterial()  ← synchronous
+    //
+    // Fix: wrap loadMeshCb so we call done() first (letting urdf-loader apply
+    // its white material), then immediately override with our orange.
+    const builtinCb = loader.loadMeshCb
     loader.loadMeshCb = (path, manager, done) => {
-      import('three/examples/jsm/loaders/STLLoader.js').then(({ STLLoader }) => {
-        const stlLoader = new STLLoader(manager)
-        stlLoader.load(
-          path,
-          (geometry) => {
-            geometry.computeVertexNormals()
-            const mesh = new THREE.Mesh(
-              geometry,
-              new THREE.MeshStandardMaterial({
-                color: 0xf0a020,
-                metalness: 0.75,
-                roughness: 0.28,
-              })
-            )
-            done(mesh)
-          },
-          undefined,
-          (err) => {
-            console.warn('STL load error:', path, err)
-            done(new THREE.Mesh(
-              new THREE.BoxGeometry(0.05, 0.05, 0.05),
-              new THREE.MeshStandardMaterial({ color: 0xff0000 })
-            ))
-          }
-        )
+      builtinCb(path, manager, (obj, err) => {
+        done(obj, err)              // ← urdf-loader sets white MeshPhongMaterial here
+        applyMaterials(obj, path)   // ← we override per-link right after, synchronously
       })
     }
 
@@ -58,36 +61,19 @@ export default function RobotArm() {
       (robot) => {
         if (cancelled) return
 
-        // Scale: URDF is in metres, Three.js scene is also metres — no scale needed
-        robot.rotation.set(0, 0, 0)
         robot.position.set(0, 0, 0)
-
-        // Apply material to all meshes — KUKA orange + metallic
-        robot.traverse((child) => {
-          if (child.isMesh) {
-            child.material = new THREE.MeshStandardMaterial({
-              color: 0xf0a020,
-              metalness: 0.75,
-              roughness: 0.28,
-              envMapIntensity: 0.8,
-            })
-            child.castShadow = true
-            child.receiveShadow = true
-          }
-        })
+        robot.rotation.set(0, 0, 0)
 
         scene.add(robot)
         robotRef.current = robot
-
-        // Apply home angles
         applyAnglesToRobot(robot, HOME_ANGLES)
 
         useStore.setState({ robotRef: robot })
         setRobotLoaded(true)
         setRobotRef(robot)
 
-        addLog('ok', 'KUKA KR210 R2700-2 loaded', { joints: JOINT_NAMES.length })
-        addLog('info', 'URDF joints verified', Object.fromEntries(
+        addLog('ok',   'KUKA KR210 R2700-2 loaded')
+        addLog('info', 'Joints', Object.fromEntries(
           JOINT_NAMES.map((n) => [n, robot.joints[n] ? '✓' : '✗'])
         ))
       },
@@ -95,24 +81,24 @@ export default function RobotArm() {
       (err) => {
         if (cancelled) return
         console.error('URDF load error:', err)
-        addLog('error', `URDF load failed: ${err.message}`)
+        addLog('error', `URDF load failed: ${err?.message ?? err}`)
       }
     )
 
     return () => {
       cancelled = true
-      if (robotRef.current) {
-        scene.remove(robotRef.current)
-      }
+      if (robotRef.current) scene.remove(robotRef.current)
     }
   }, [])
 
-  // Sync joint angles from store → robot
   useEffect(() => {
-    const robot = robotRef.current || useStore.getState().robotRef
-    if (!robot) return
-    applyAnglesToRobot(robot, jointAngles)
-  }, [jointAngles])
+    return useStore.subscribe(
+      (state) => state.jointAngles,
+      (angles) => {
+        if (robotRef.current) applyAnglesToRobot(robotRef.current, angles)
+      }
+    )
+  }, [])
 
   return null
 }

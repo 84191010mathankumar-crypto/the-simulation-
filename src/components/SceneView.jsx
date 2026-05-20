@@ -11,36 +11,40 @@ export default function SceneView() {
   return (
     <div className="scene-view">
       <Canvas
-        camera={{ position: [3.5, 2.5, 3.5], fov: 45, near: 0.01, far: 100 }}
-        shadows
-        gl={{ antialias: true }}
+        camera={{ position: [3.5, 2.8, 3.5], fov: 44, near: 0.01, far: 100 }}
+        shadows="soft"
+        gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
+        onCreated={({ gl }) => { gl.toneMappingExposure = 0.9 }}
       >
         {/* Lighting */}
-        <ambientLight intensity={0.4} />
+        <ambientLight intensity={0.6} />
         <directionalLight
-          position={[5, 8, 5]}
-          intensity={1.2}
+          position={[6, 9, 5]}
+          intensity={1.8}
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-camera-near={0.1}
-          shadow-camera-far={30}
-          shadow-camera-left={-5}
-          shadow-camera-right={5}
+          shadow-camera-far={40}
+          shadow-camera-left={-4}
+          shadow-camera-right={4}
           shadow-camera-top={5}
-          shadow-camera-bottom={-5}
+          shadow-camera-bottom={-2}
         />
-        <pointLight position={[-3, 4, -3]} intensity={0.4} color="#3b82f6" />
+        <pointLight position={[-3, 5, -2]} intensity={0.5} color="#ffcc66" />
+
+        {/* Environment map — warm tone so orange reads clearly */}
+        <Environment preset="city" background={false} />
 
         {/* Floor grid */}
         <Grid
-          args={[12, 12]}
+          args={[14, 14]}
           cellSize={0.5}
-          cellThickness={0.5}
+          cellThickness={0.4}
           cellColor="#252836"
           sectionSize={1}
-          sectionThickness={1}
+          sectionThickness={0.8}
           sectionColor="#363a4f"
-          fadeDistance={15}
+          fadeDistance={16}
           fadeStrength={1}
           followCamera={false}
           infiniteGrid
@@ -50,7 +54,7 @@ export default function SceneView() {
         {/* Shadow catcher */}
         <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]}>
           <planeGeometry args={[20, 20]} />
-          <shadowMaterial opacity={0.25} />
+          <shadowMaterial opacity={0.3} />
         </mesh>
 
         <Suspense fallback={null}>
@@ -61,13 +65,13 @@ export default function SceneView() {
           <AnimationController />
         </Suspense>
 
-        {/* Camera controls */}
+        {/* Camera controls — orbit around arm centre of mass */}
         <OrbitControls
           makeDefault
-          target={[0, 0.8, 0]}
-          maxPolarAngle={Math.PI * 0.85}
+          target={[0, 1.0, 0]}
+          maxPolarAngle={Math.PI * 0.88}
           minDistance={0.5}
-          maxDistance={12}
+          maxDistance={14}
         />
 
         {/* Orientation gizmo */}
@@ -76,12 +80,11 @@ export default function SceneView() {
         </GizmoHelper>
       </Canvas>
 
-      {/* Overlay hints */}
       <div className="scene-hints">
-        <span>LMB drag: orbit</span>
-        <span>RMB drag: pan</span>
+        <span>LMB: orbit</span>
+        <span>RMB: pan</span>
         <span>Scroll: zoom</span>
-        <span>Click object to select + drag gizmo</span>
+        <span>Click box → drag gizmo</span>
       </div>
     </div>
   )
