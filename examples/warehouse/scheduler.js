@@ -104,6 +104,10 @@ export function createScheduler({ robots, boxes, onLog }) {
     if (!running) return
     for (const r of robots) {
       if (robotBusy.has(r.id)) continue
+      // Skip robots whose URDF hasn't finished loading yet — otherwise the
+      // AnimationController has no robotRef and silently burns through the
+      // pick-and-place state machine without animating.
+      if (!r.store.getState().robotLoaded) continue
       const next = pickTask(r)
       if (!next) continue
       assign(r, next)
@@ -209,9 +213,12 @@ export function createScheduler({ robots, boxes, onLog }) {
           log('ok', `Robot ${r.id} done with box ${box.id}`)
         }
         robotBusy.delete(r.id)
-        pump()
       }
     }
+
+    // Always re-pump so newly-loaded robots get work without us having to
+    // wait for one of the active robots to finish a segment.
+    if (running) pump()
 
     return anyChanged
   }

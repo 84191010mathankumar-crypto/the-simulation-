@@ -65,17 +65,28 @@ function RobotOnPlatform({ store, robotColor }) {
 }
 
 /* Static box rendered at world position.  The scheduler later reparents it
- * under a robot's gripper during 'grabbing'. */
+ * under a robot's gripper during 'grabbing'.
+ *
+ * We deliberately do NOT pass `position` as a JSX prop — R3F would re-apply
+ * `box.from` on every render and undo the scheduler's reparenting.  Instead,
+ * the position is set imperatively the first time the ref settles, and the
+ * scheduler then owns the mesh's transform and parent for the rest of the run.
+ */
 function Box({ box, registerMeshRef }) {
   const ref = useRef()
-  useEffect(() => { registerMeshRef(box.id, ref); return () => registerMeshRef(box.id, null) }, [box.id, registerMeshRef])
+  useEffect(() => {
+    // IMPORTANT — register the actual THREE.Mesh (ref.current), NOT the ref
+    // object.  The scheduler does `mesh.userData = ...`, `mesh.updateMatrixWorld()`
+    // etc. directly on whatever was registered.
+    registerMeshRef(box.id, ref.current)
+    if (ref.current) {
+      ref.current.position.set(box.from[0], box.from[1], box.from[2])
+      ref.current.rotation.set(0, 0, 0)
+    }
+    return () => registerMeshRef(box.id, null)
+  }, [box.id, registerMeshRef])
   return (
-    <mesh
-      ref={ref}
-      position={box.from}
-      castShadow
-      receiveShadow
-    >
+    <mesh ref={ref} castShadow receiveShadow>
       <boxGeometry args={box.size} />
       <meshStandardMaterial color="#c15f3c" metalness={0.1} roughness={0.7} />
     </mesh>

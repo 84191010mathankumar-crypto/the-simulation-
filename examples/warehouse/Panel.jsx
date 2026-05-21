@@ -1,6 +1,7 @@
 import React from 'react'
 
-export default function Panel({ robotCount, setRobotCount, onStart, onReset, running, taskCounts, logs }) {
+export default function Panel({ robotCount, setRobotCount, onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal }) {
+  const allLoaded = loadedCount >= robotsTotal
   return (
     <aside className="warehouse-panel">
       <div className="head">
@@ -26,8 +27,8 @@ export default function Panel({ robotCount, setRobotCount, onStart, onReset, run
 
       <section className="section">
         <div className="btn-row">
-          <button className="btn-primary" onClick={onStart} disabled={running}>
-            {running ? 'Running…' : 'Start'}
+          <button className="btn-primary" onClick={onStart} disabled={running || !allLoaded}>
+            {running ? 'Running…' : allLoaded ? 'Start' : `Loading ${loadedCount}/${robotsTotal}…`}
           </button>
           <button className="btn-secondary" onClick={onReset}>Reset</button>
         </div>

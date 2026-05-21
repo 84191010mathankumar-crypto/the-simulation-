@@ -44,12 +44,28 @@ function App() {
   const [running, setRunning] = useState(false)
   const [logs, setLogs] = useState([])
   const [taskCounts, setTaskCounts] = useState({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
+  const [loadedCount, setLoadedCount] = useState(0)
 
-  // Robot stores — recreated whenever the count changes
+  /* Stable bank of stores — grow on demand, never shrink.
+   *
+   * If we recreated stores from scratch on every count change, existing
+   * RobotArm components (preserved by React because their `key` matched)
+   * would still hold the OLD store's actions in their load-effect closure.
+   * The URDF would load and call setRobotLoaded on a dead store; the UI's
+   * subscription to the new store would never see `robotLoaded=true` and
+   * Start would be stuck on "Loading 1/5...".  Keeping stores stable per
+   * slot makes the load + UI agree on the same object.
+   */
+  const storesRef = useRef([])
   const robots = useMemo(() => {
+    while (storesRef.current.length < robotCount) {
+      storesRef.current.push(createRobotStore())
+    }
     const homes = makeRobotHomes(robotCount, ROOM_SIZE)
     return homes.map((home, i) => {
-      const store = createRobotStore()
+      const store = storesRef.current[i]
+      // Always re-apply the home (it depends on count) and turn mobile mode on.
+      // robotLoaded / robotRef are preserved if the URDF is already in scene.
       store.setState({
         mobileMode: true,
         parkingRef: 'self',
@@ -97,6 +113,20 @@ function App() {
     return () => clearInterval(t)
   }, [running, scheduler])
 
+  // Subscribe to each robot's `robotLoaded` flag so the Start button can stay
+  // disabled until every URDF finished loading.  When the slider changes, we
+  // rebuild subscriptions and reset the counter.
+  useEffect(() => {
+    setLoadedCount(robots.filter((r) => r.store.getState().robotLoaded).length)
+    const unsubs = robots.map((r) => r.store.subscribe(
+      (s) => s.robotLoaded,
+      () => {
+        setLoadedCount(robots.filter((x) => x.store.getState().robotLoaded).length)
+      },
+    ))
+    return () => { for (const u of unsubs) u() }
+  }, [robots])
+
   const onStart = () => {
     setRunning(true)
     scheduler.start()
@@ -118,6 +148,8 @@ function App() {
         running={running}
         taskCounts={taskCounts}
         logs={logs}
+        loadedCount={loadedCount}
+        robotsTotal={robots.length}
       />
       <WarehouseScene
         robots={robots}

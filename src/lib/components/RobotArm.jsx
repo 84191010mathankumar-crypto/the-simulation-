@@ -220,6 +220,12 @@ export default function RobotArm({
       if (robotRef.current && robotRef.current.parent) {
         robotRef.current.parent.remove(robotRef.current)
       }
+      // Mark the store as "no live URDF" so a scheduler that survives this
+      // component (e.g. across slider-driven remounts in the warehouse demo)
+      // won't keep using the stale robotRef before a new load completes.
+      setRobotLoaded(false)
+      setRobotRef(null)
+      robotRef.current = null
     }
   }, [])
 
