@@ -13,7 +13,7 @@ The repo contains both:
 1. **The library** under [src/lib/](src/lib/) — the parts you reuse in any app.
 2. **A demo app** at the repo root — a Vite-powered single-page app that shows the library in action.  The demo is also a reference implementation: copy it as the starting point for your own scene.
 
-> **Where this is going** — the goal is a larger app where **multiple robots roam a shared space and rebuild it by moving objects from A to B**.  This repo will host that app too; the boundary between *library* and *the bigger project* is the [src/lib/](src/lib/) folder.
+> **Where this is going** — the goal is a larger app where **multiple robots roam a shared space and rebuild it by moving objects from A to B**.  This repo will host that app too: a stub for it lives at [examples/warehouse/](examples/warehouse/) and is the intended home for the multi-robot scene.  The boundary between *library* and *the bigger project* is the [src/lib/](src/lib/) folder.
 
 ---
 
@@ -41,6 +41,10 @@ The terminal will show something like `Local: http://localhost:5173/` — open t
 
 If something looks wrong — robot is white, meshes missing — you almost certainly haven't run `npm install` yet, or you're opening a stale tab.  Stop the server (`Ctrl+C` in the terminal), run `npm install`, then `npm run dev` again.
 
+### Running the warehouse example (stub)
+
+The same `npm run dev` server also serves a second page at **[/examples/warehouse/](http://localhost:5173/examples/warehouse/)** — a placeholder that imports the library and is the intended home for the multi-robot "rebuild the space" scene.  Open the URL directly in your browser; no extra command needed.
+
 ---
 
 ## 2. Repo layout
@@ -55,6 +59,12 @@ roboclaw/
 ├── public/
 │   └── lib-assets/        ← runtime assets the library needs in the browser
 │       └── kr210/         ← URDF + STL meshes for the KUKA KR210
+│
+├── examples/
+│   └── warehouse/         ← stub for the bigger multi-robot scene
+│       ├── index.html
+│       ├── main.jsx
+│       └── vite.config.js
 │
 └── src/
     ├── main.jsx           ← demo app bootstrap
