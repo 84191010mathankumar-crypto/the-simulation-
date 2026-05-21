@@ -1,5 +1,5 @@
 import React from 'react'
-import { useRobotStore, JOINT_NAMES, JOINT_LIMITS } from '../lib'
+import { useStore, JOINT_NAMES, JOINT_LIMITS } from '../lib'
 import './ControlPanel.css'
 
 const rad2deg = (r) => (r * 180) / Math.PI
@@ -62,7 +62,7 @@ export default function ControlPanel() {
     mobileMode, setMobileMode,
     addLog, clearLogs, logs,
     setAnimState, resetToHome,
-  } = useRobotStore()
+  } = useStore()
 
   const canRun    = robotLoaded && animState === 'idle'
   const isRunning = animState !== 'idle'

@@ -1,8 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useRobotStoreApi } from '../state/store.jsx'
-import { JOINT_NAMES, HOME_ANGLES } from '../state/constants.js'
+import useStore, { JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
 import {
   applyAnglesToRobot,
   readAnglesFromRobot,
@@ -13,31 +12,13 @@ import {
   clampAllJoints,
 } from '../ik/ikSolver'
 
-// Seconds per motion segment.  Drive segments (moving_to_start, moving_to_end,
-// returning) scale with distance in mobile mode so a 15 m warehouse drive
-// doesn't finish in 2 s; see _durationFor below.
+// Seconds per motion segment
 const SPEED = {
   moving_to_start: 2.0,
   grabbing:        0.5,
   moving_to_end:   2.0,
   releasing:       0.5,
   returning:       1.6,
-}
-
-// Mobile-mode drive speed for the AGV chassis (m/s).  Used to derive the
-// per-segment duration when the platform is travelling further than a few
-// metres — otherwise the constant SPEED above produces unrealistic warp.
-const DRIVE_SPEED = 1.6   // m/s
-
-function _durationFor(animState, fromPlatform, toPlatform, mobileMode) {
-  const base = SPEED[animState] || 1.0
-  if (!mobileMode || !fromPlatform || !toPlatform) return base
-  if (animState !== 'moving_to_start' && animState !== 'moving_to_end' && animState !== 'returning') return base
-  const dx = toPlatform.position[0] - fromPlatform.position[0]
-  const dz = toPlatform.position[2] - fromPlatform.position[2]
-  const d  = Math.hypot(dx, dz)
-  if (d < 0.5) return base
-  return Math.max(base, d / DRIVE_SPEED)
 }
 
 const SEQUENCE = {
@@ -48,7 +29,7 @@ const SEQUENCE = {
   returning:       'idle',
 }
 
-const DEFAULT_HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
+const HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
 
 // Distance from the platform's base centre to the target object — chosen so
 // the arm can reach the target naturally without being either cramped or
@@ -56,22 +37,14 @@ const DEFAULT_HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
 const PLATFORM_STANDOFF = 1.1
 
 /* Park the platform STANDOFF metres back from the target along the line
- * from the robot's *current* platform position to the target — so multiple
- * robots starting at different home positions each approach naturally from
- * their own side, instead of all converging on the world origin.
- *
- * Platform rotation stays at zero — the arm's joint_1 swings to face the
- * target via IK. */
-function computePlatformPoseFor(targetWorldPos, currentPose) {
+ * from world origin → target.  Platform rotation stays at zero — the arm's
+ * joint_1 will swing to face the target via IK. */
+function computePlatformPoseFor(targetWorldPos) {
   const tx = targetWorldPos[0]
   const tz = targetWorldPos[2]
-  const cx = currentPose?.position?.[0] ?? 0
-  const cz = currentPose?.position?.[2] ?? 0
-  const dx = tx - cx
-  const dz = tz - cz
-  const dist = Math.hypot(dx, dz) || 1e-6
-  const px = tx - (dx / dist) * PLATFORM_STANDOFF
-  const pz = tz - (dz / dist) * PLATFORM_STANDOFF
+  const dist = Math.hypot(tx, tz) || 1e-6
+  const px = tx - (tx / dist) * PLATFORM_STANDOFF
+  const pz = tz - (tz / dist) * PLATFORM_STANDOFF
   return { position: [px, 0, pz], rotation: [0, 0, 0] }
 }
 
@@ -99,14 +72,13 @@ export default function AnimationController() {
   const progressRef = useRef(0)
   const prevStateRef = useRef('idle')
   const lastFollowKeyRef = useRef('')
-  const storeApi = useRobotStoreApi()
 
   useFrame((_, delta) => {
-    const state = storeApi.getState()
+    const store = useStore.getState()
     const {
       animState, robotRef, fromAngles, toAngles, fromPlatform, toPlatform,
       followTarget, startObject, endObject, mobileMode,
-    } = state
+    } = store
 
     // ── Follow mode: live IK as the user drags the target ──────────────────
     if (animState === 'idle' && followTarget && robotRef) {
@@ -118,16 +90,16 @@ export default function AnimationController() {
         // In mobile mode the platform also follows: snap it to its preferred
         // parked pose for this target before solving IK.
         if (mobileMode) {
-          const platPose = computePlatformPoseFor(obj.position, state.platformPose)
-          storeApi.setState({ platformPose: platPose })
-          _setGroupPose(state.platformGroupRef, platPose)
+          const platPose = computePlatformPoseFor(obj.position)
+          useStore.setState({ platformPose: platPose })
+          _setGroupPose(store.platformGroupRef, platPose)
         }
 
         const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
         const solved = solveCCDIK(robotRef, faceCenter, toolZ, 80, 0.006)
         if (solved) {
           applyAnglesToRobot(robotRef, solved)
-          storeApi.setState({ jointAngles: { ...solved } })
+          useStore.setState({ jointAngles: { ...solved } })
         }
       }
       return
@@ -146,23 +118,22 @@ export default function AnimationController() {
       progressRef.current  = 0
 
       const currentAngles   = readAnglesFromRobot(robotRef) || { ...HOME_ANGLES }
-      const currentPlatform = { ...state.platformPose }
+      const currentPlatform = { ...store.platformPose }
 
       if (animState === 'moving_to_start') {
-        _solveSegment(storeApi, state, 'start', currentAngles, currentPlatform)
+        _solveSegment(store, 'start', currentAngles, currentPlatform)
       } else if (animState === 'moving_to_end') {
-        _solveSegment(storeApi, state, 'end',   currentAngles, currentPlatform)
+        _solveSegment(store, 'end',   currentAngles, currentPlatform)
       } else if (animState === 'returning') {
         const homeAngles = clampAllJoints({ ...HOME_ANGLES })
-        const homePlatform = state.platformHome || DEFAULT_HOME_PLATFORM
-        storeApi.setState({
+        useStore.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
-          fromPlatform: currentPlatform, toPlatform: { ...homePlatform },
+          fromPlatform: currentPlatform, toPlatform: { ...HOME_PLATFORM },
         })
-        state.addLog('info', 'Returning to HOME…')
+        store.addLog('info', 'Returning to HOME…')
       } else {
         // grabbing / releasing: hold pose
-        storeApi.setState({
+        useStore.setState({
           fromAngles: currentAngles, toAngles: currentAngles,
           fromPlatform: currentPlatform, toPlatform: currentPlatform,
         })
@@ -171,24 +142,24 @@ export default function AnimationController() {
     }
 
     // ── Advance segment ────────────────────────────────────────────────────
-    const duration = _durationFor(animState, fromPlatform, toPlatform, mobileMode)
+    const duration = SPEED[animState] || 1.0
     progressRef.current = Math.min(1, progressRef.current + delta / duration)
     const t = easeInOutCubic(progressRef.current)
 
-    storeApi.setState({ animProgress: progressRef.current })
+    useStore.setState({ animProgress: progressRef.current })
 
     if (fromAngles && toAngles && robotRef) {
       const interp = lerpAngles(fromAngles, toAngles, t)
       applyAnglesToRobot(robotRef, interp)
-      storeApi.setState({ jointAngles: { ...interp } })
+      useStore.setState({ jointAngles: { ...interp } })
     }
     if (mobileMode && fromPlatform && toPlatform) {
       const ip = lerpPose(fromPlatform, toPlatform, t)
-      storeApi.setState({ platformPose: ip })
+      useStore.setState({ platformPose: ip })
     }
 
     if (progressRef.current >= 1) {
-      _onSegmentComplete(storeApi, state, animState)
+      _onSegmentComplete(store, animState)
     }
   })
 
@@ -201,16 +172,15 @@ export default function AnimationController() {
  * then restore the group's current pose (the lerp will drive both to the
  * future pose together).
  */
-function _solveSegment(storeApi, state, target, currentAngles, currentPlatform) {
-  const { robotRef, startObject, endObject, addLog, mobileMode, platformGroupRef } = state
+function _solveSegment(store, target, currentAngles, currentPlatform) {
+  const { robotRef, startObject, endObject, addLog, mobileMode, platformGroupRef } = store
   if (!robotRef) return
 
   const obj = target === 'start' ? startObject : endObject
   const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
 
-  // Pick where the platform should park for this target — approach from the
-  // robot's current position so multi-robot scenes don't all converge on origin.
-  const targetPlatform = mobileMode ? computePlatformPoseFor(obj.position, currentPlatform) : currentPlatform
+  // Pick where the platform should park for this target
+  const targetPlatform = mobileMode ? computePlatformPoseFor(obj.position) : currentPlatform
 
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
     X: faceCenter.x.toFixed(3),
@@ -240,14 +210,14 @@ function _solveSegment(storeApi, state, target, currentAngles, currentPlatform) 
     const clamped = clampAllJoints(solved)
     applyAnglesToRobot(robotRef, currentAngles)
     addLog('ok', `IK converged for ${target.toUpperCase()}`, _logAngles(clamped))
-    storeApi.setState({
+    useStore.setState({
       fromAngles: currentAngles, toAngles: clamped,
       fromPlatform: currentPlatform, toPlatform: targetPlatform,
     })
   } else {
     addLog('warn', `IK did not converge for ${target} — target may be out of reach`)
     applyAnglesToRobot(robotRef, currentAngles)
-    storeApi.setState({
+    useStore.setState({
       fromAngles: currentAngles, toAngles: currentAngles,
       fromPlatform: currentPlatform, toPlatform: currentPlatform,
     })
@@ -264,8 +234,8 @@ function _setGroupPose(group, pose) {
   group.updateMatrixWorld(true)
 }
 
-function _onSegmentComplete(storeApi, state, current) {
-  const { addLog, setAnimState, robotRef } = state
+function _onSegmentComplete(store, current) {
+  const { addLog, setAnimState, robotRef } = store
   const currentAngles = robotRef
     ? Object.fromEntries(JOINT_NAMES.map((n) => [n, robotRef.joints[n]?.angle ?? 0]))
     : {}
@@ -285,7 +255,7 @@ function _onSegmentComplete(storeApi, state, current) {
       break
     case 'returning':
       addLog('ok', '✓ HOME — sequence complete', _logAngles(HOME_ANGLES))
-      storeApi.setState({ animProgress: 0 })
+      useStore.setState({ animProgress: 0 })
       break
   }
 
