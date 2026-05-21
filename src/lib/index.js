@@ -6,18 +6,15 @@
  *
  *   import {
  *     RobotArm, AnimationController, WorkObject, WorkingEnvelope,
- *     useStore, JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA,
+ *     useStore, createRobotStore, RobotStoreProvider, useRobotStore,
+ *     JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA,
  *     solveCCDIK, computeGrabPose, getToolPose,
  *     KR210_DEFAULT_URDF, KR210_DEFAULT_PACKAGE_DIR,
- *   } from 'roboclaw'   // or '<repo>/src/lib' until published
+ *   } from 'roboclaw'
  *
- * Everything in `./components`, `./state`, and `./ik` is intentionally
- * exported so power users can reach into internals when they need to.
- * The named exports below are the stable surface.
- *
- * NOTE — v1 ships with a SINGLE-ROBOT singleton store.  When you need
- * multiple arms in the same scene, look at `state/useStore.js` — that
- * file is the one place that needs converting into a factory.
+ * Single-robot apps just use `useStore` (the singleton).  Multi-robot apps
+ * call `createRobotStore()` once per arm and wrap each <RobotArm> /
+ * <AnimationController> pair in <RobotStoreProvider store={...}>.
  */
 
 // Scene components
@@ -28,10 +25,12 @@ export { default as AnimationController } from './components/AnimationController
 export { default as WorkObject, BOX_HALF }  from './components/WorkObject.jsx'
 export { default as WorkingEnvelope }       from './components/WorkingEnvelope.jsx'
 
-// State (the global store)
+// State (the global store + factory for multi-robot use)
 export { default as useStore,
+         createRobotStore,
          JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA }
   from './state/useStore.js'
+export { RobotStoreProvider, useRobotStore } from './state/context.jsx'
 
 // Inverse-kinematics primitives
 export {

@@ -1,10 +1,27 @@
 /**
- * Global store for the (currently single) robot arm + its work objects.
+ * Per-robot zustand store + a singleton default for backwards-compat with
+ * the original single-robot demo.
  *
- * The lib intentionally ships a singleton zustand store — a small, readable
- * surface that lets the demo (and external apps) drive everything by calling
- * actions and reading state.  When you need multiple arms in the same scene,
- * convert this file into a factory that returns a fresh store per instance.
+ *   import useStore from '.../useStore'           // singleton (main demo)
+ *   import { createRobotStore } from '.../useStore'  // factory (warehouse)
+ *
+ * The two are *literally the same shape* — `useStore` is just one fixed
+ * instance of `createRobotStore()`.  In the warehouse, one store is created
+ * per robot and threaded through a React context (see ./context.jsx) so the
+ * existing RobotArm / AnimationController / WorkObject components can run
+ * in parallel without any per-robot code-fork.
+ *
+ * What's new in this revision (for multi-robot):
+ *   - `homePlatform`  — per-robot AGV "parking spot" used by the
+ *                       `returning` animation segment.  Defaults to (0,0,0)
+ *                       so the main demo behaves identically.
+ *   - `parkingRef`    — 'origin' | 'self'.  Controls how the AnimationController
+ *                       picks a parking pose for a target.  'origin' (default)
+ *                       preserves the main demo exactly: park STANDOFF before
+ *                       the target along the line FROM world origin.  'self'
+ *                       parks STANDOFF before the target along the line FROM
+ *                       the robot's CURRENT platform position — what you want
+ *                       when many robots roam a shared room.
  */
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
@@ -39,88 +56,95 @@ export const WORKING_AREA = {
   maxZ:  2.5,
 }
 
-const initialJointAngles = { ...HOME_ANGLES }
-
 let logId = 0
 
-const useStore = create(subscribeWithSelector((set, get) => ({
-  // ── Robot state ───────────────────────────────────────────────────────────
-  jointAngles: { ...initialJointAngles },
-  robotLoaded: false,
-  robotRef: null,
-  ikSolverRef: null,
-
-  // ── Work objects (the "pick" and "place" boxes) ───────────────────────────
-  // grabVector is a unit vector in the object's local frame pointing OUT of
-  // the face the gripper approaches.
-  startObject: {
-    position: [0.8, 0.4, 0.5],
-    rotation: [0, 0, 0],
-    grabVector: [0, 1, 0],
-  },
-  endObject: {
-    position: [0.8, -0.4, 0.5],
-    rotation: [0, 0, 0],
-    grabVector: [0, 1, 0],
-  },
-
-  // ── UI selection ──────────────────────────────────────────────────────────
-  selectedObject: 'start',
-  transformMode: 'translate',
-
-  // ── Animation state ───────────────────────────────────────────────────────
-  // 'idle' | 'moving_to_start' | 'grabbing' | 'moving_to_end' | 'releasing' | 'returning'
-  animState: 'idle',
-  animProgress: 0,
-  fromAngles: null,
-  toAngles: null,
-
-  // ── Follow mode ───────────────────────────────────────────────────────────
-  // null | 'start' | 'end' — continuously IK-solve as the user drags the gumball.
-  followTarget: null,
-
-  // ── Mobile platform (AGV) ─────────────────────────────────────────────────
-  mobileMode: false,
-  platformPose: { position: [0, 0, 0], rotation: [0, 0, 0] },
-  platformGroupRef: null,
-  fromPlatform: null,
-  toPlatform: null,
-
-  // ── Log ───────────────────────────────────────────────────────────────────
-  logs: [],
-
-  // ── Actions ───────────────────────────────────────────────────────────────
-  setRobotLoaded: (v) => set({ robotLoaded: v }),
-  setRobotRef:    (r) => set({ robotRef: r }),
-  setIkSolverRef: (r) => set({ ikSolverRef: r }),
-
-  setJointAngles: (angles) => set({ jointAngles: { ...angles } }),
-
-  setStartObject: (patch) => set((s) => ({ startObject: { ...s.startObject, ...patch } })),
-  setEndObject:   (patch) => set((s) => ({ endObject:   { ...s.endObject,   ...patch } })),
-
-  setSelectedObject: (v) => set({ selectedObject: v }),
-  setTransformMode:  (v) => set({ transformMode: v }),
-
-  setAnimState:        (v) => set({ animState: v }),
-  setFollowTarget:     (v) => set({ followTarget: v }),
-  setMobileMode:       (v) => set({ mobileMode: v }),
-  setPlatformPose:     (p) => set({ platformPose: p }),
-  setPlatformGroupRef: (r) => set({ platformGroupRef: r }),
-  setAnimProgress:     (p) => set({ animProgress: p }),
-  setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),
-
-  addLog: (level, msg, extra) => {
-    const entry = { id: logId++, ts: performance.now(), level, msg, extra }
-    set((s) => ({ logs: [entry, ...s.logs].slice(0, 200) }))
-  },
-  clearLogs: () => set({ logs: [] }),
-
-  resetToHome: () => set({
+/**
+ * Returns a fresh zustand store with the single-robot state shape.
+ * Spawn one per robot in multi-robot scenes.
+ */
+export function createRobotStore() {
+  return create(subscribeWithSelector((set, get) => ({
+    // ── Robot state ────────────────────────────────────────────────────────
     jointAngles: { ...HOME_ANGLES },
+    robotLoaded: false,
+    robotRef: null,
+    ikSolverRef: null,
+
+    // ── Work objects (the "pick" and "place" boxes) ────────────────────────
+    startObject: {
+      position: [0.8, 0.4, 0.5],
+      rotation: [0, 0, 0],
+      grabVector: [0, 1, 0],
+    },
+    endObject: {
+      position: [0.8, -0.4, 0.5],
+      rotation: [0, 0, 0],
+      grabVector: [0, 1, 0],
+    },
+
+    // ── UI selection ───────────────────────────────────────────────────────
+    selectedObject: 'start',
+    transformMode: 'translate',
+
+    // ── Animation state ────────────────────────────────────────────────────
     animState: 'idle',
     animProgress: 0,
-  }),
-})))
+    fromAngles: null,
+    toAngles: null,
 
+    // ── Follow mode (live IK while dragging the target) ────────────────────
+    followTarget: null,
+
+    // ── Mobile platform (AGV) ──────────────────────────────────────────────
+    mobileMode: false,
+    platformPose:    { position: [0, 0, 0], rotation: [0, 0, 0] },
+    homePlatform:    { position: [0, 0, 0], rotation: [0, 0, 0] },  // where to return to
+    parkingRef:      'origin',   // 'origin' | 'self' — see file header
+    platformGroupRef: null,
+    fromPlatform: null,
+    toPlatform: null,
+
+    // ── Log ────────────────────────────────────────────────────────────────
+    logs: [],
+
+    // ── Actions ────────────────────────────────────────────────────────────
+    setRobotLoaded: (v) => set({ robotLoaded: v }),
+    setRobotRef:    (r) => set({ robotRef: r }),
+    setIkSolverRef: (r) => set({ ikSolverRef: r }),
+
+    setJointAngles: (angles) => set({ jointAngles: { ...angles } }),
+
+    setStartObject: (patch) => set((s) => ({ startObject: { ...s.startObject, ...patch } })),
+    setEndObject:   (patch) => set((s) => ({ endObject:   { ...s.endObject,   ...patch } })),
+
+    setSelectedObject: (v) => set({ selectedObject: v }),
+    setTransformMode:  (v) => set({ transformMode: v }),
+
+    setAnimState:        (v) => set({ animState: v }),
+    setFollowTarget:     (v) => set({ followTarget: v }),
+    setMobileMode:       (v) => set({ mobileMode: v }),
+    setPlatformPose:     (p) => set({ platformPose: p }),
+    setHomePlatform:     (p) => set({ homePlatform: p }),
+    setParkingRef:       (v) => set({ parkingRef: v }),
+    setPlatformGroupRef: (r) => set({ platformGroupRef: r }),
+    setAnimProgress:     (p) => set({ animProgress: p }),
+    setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),
+
+    addLog: (level, msg, extra) => {
+      const entry = { id: logId++, ts: performance.now(), level, msg, extra }
+      set((s) => ({ logs: [entry, ...s.logs].slice(0, 200) }))
+    },
+    clearLogs: () => set({ logs: [] }),
+
+    resetToHome: () => set({
+      jointAngles: { ...HOME_ANGLES },
+      animState: 'idle',
+      animProgress: 0,
+    }),
+  })))
+}
+
+// Default singleton — the main demo's store, also used as the fallback when
+// no <RobotStoreProvider> wraps the component tree.
+const useStore = createRobotStore()
 export default useStore

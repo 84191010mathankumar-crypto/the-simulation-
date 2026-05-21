@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useCallback } from 'react'
 import { PivotControls, Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import useStore from '../state/useStore'
+import { useRobotStore } from '../state/context'
 
 const BOX_SIZE = [0.15, 0.15, 0.15]
 export const BOX_HALF = BOX_SIZE[0] / 2
@@ -16,10 +16,11 @@ export default function WorkObject({ objectKey, color }) {
   const groupRef = useRef()
   const lastMatrixRef = useRef(null)
 
-  const {
-    startObject, endObject,
-    setStartObject, setEndObject,
-  } = useStore()
+  const useStore = useRobotStore()
+  const startObject    = useStore((s) => s.startObject)
+  const endObject      = useStore((s) => s.endObject)
+  const setStartObject = useStore((s) => s.setStartObject)
+  const setEndObject   = useStore((s) => s.setEndObject)
 
   const isStart = objectKey === 'start'
   const obj     = isStart ? startObject : endObject

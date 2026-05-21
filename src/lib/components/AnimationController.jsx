@@ -1,7 +1,8 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import useStore, { JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
+import { JOINT_NAMES, HOME_ANGLES } from '../state/useStore'
+import { useRobotStore } from '../state/context'
 import {
   applyAnglesToRobot,
   readAnglesFromRobot,
@@ -29,22 +30,30 @@ const SEQUENCE = {
   returning:       'idle',
 }
 
-const HOME_PLATFORM = { position: [0, 0, 0], rotation: [0, 0, 0] }
-
 // Distance from the platform's base centre to the target object — chosen so
 // the arm can reach the target naturally without being either cramped or
 // fully extended.
 const PLATFORM_STANDOFF = 1.1
 
-/* Park the platform STANDOFF metres back from the target along the line
- * from world origin → target.  Platform rotation stays at zero — the arm's
- * joint_1 will swing to face the target via IK. */
-function computePlatformPoseFor(targetWorldPos) {
+/* Pick where the platform should park to grab the target.
+ *
+ *   parkingRef = 'origin' (default, main demo) — park STANDOFF metres before
+ *                the target along the line from WORLD ORIGIN to the target.
+ *   parkingRef = 'self'   (warehouse)         — park STANDOFF metres before
+ *                the target along the line from the robot's CURRENT platform
+ *                position to the target.  This way each roaming robot
+ *                approaches from the side it's already on.
+ */
+function computePlatformPoseFor(targetWorldPos, currentPlatformPos, parkingRef) {
   const tx = targetWorldPos[0]
   const tz = targetWorldPos[2]
-  const dist = Math.hypot(tx, tz) || 1e-6
-  const px = tx - (tx / dist) * PLATFORM_STANDOFF
-  const pz = tz - (tz / dist) * PLATFORM_STANDOFF
+  const refX = parkingRef === 'self' ? currentPlatformPos[0] : 0
+  const refZ = parkingRef === 'self' ? currentPlatformPos[2] : 0
+  const dx = tx - refX
+  const dz = tz - refZ
+  const dist = Math.hypot(dx, dz) || 1e-6
+  const px = tx - (dx / dist) * PLATFORM_STANDOFF
+  const pz = tz - (dz / dist) * PLATFORM_STANDOFF
   return { position: [px, 0, pz], rotation: [0, 0, 0] }
 }
 
@@ -64,20 +73,25 @@ function lerpPose(a, b, t) {
 }
 
 /**
- * Headless R3F component — drives the joint animation, and (in mobile mode)
- * the AGV platform pose as well.  Pick-and-place sequence:
+ * Headless R3F component — drives the joint animation and (in mobile mode)
+ * the AGV platform pose.  Pick-and-place sequence:
  *   moving_to_start → grabbing → moving_to_end → releasing → returning → idle
+ *
+ * Binds to the per-robot store from `RobotStoreContext`; with no provider it
+ * uses the lib singleton, which is exactly the main demo's behaviour.
  */
 export default function AnimationController() {
   const progressRef = useRef(0)
   const prevStateRef = useRef('idle')
   const lastFollowKeyRef = useRef('')
+  const useStore = useRobotStore()
 
   useFrame((_, delta) => {
     const store = useStore.getState()
     const {
       animState, robotRef, fromAngles, toAngles, fromPlatform, toPlatform,
       followTarget, startObject, endObject, mobileMode,
+      platformPose, parkingRef,
     } = store
 
     // ── Follow mode: live IK as the user drags the target ──────────────────
@@ -87,10 +101,8 @@ export default function AnimationController() {
       if (key !== lastFollowKeyRef.current) {
         lastFollowKeyRef.current = key
 
-        // In mobile mode the platform also follows: snap it to its preferred
-        // parked pose for this target before solving IK.
         if (mobileMode) {
-          const platPose = computePlatformPoseFor(obj.position)
+          const platPose = computePlatformPoseFor(obj.position, platformPose.position, parkingRef)
           useStore.setState({ platformPose: platPose })
           _setGroupPose(store.platformGroupRef, platPose)
         }
@@ -121,18 +133,17 @@ export default function AnimationController() {
       const currentPlatform = { ...store.platformPose }
 
       if (animState === 'moving_to_start') {
-        _solveSegment(store, 'start', currentAngles, currentPlatform)
+        _solveSegment(useStore, store, 'start', currentAngles, currentPlatform)
       } else if (animState === 'moving_to_end') {
-        _solveSegment(store, 'end',   currentAngles, currentPlatform)
+        _solveSegment(useStore, store, 'end',   currentAngles, currentPlatform)
       } else if (animState === 'returning') {
         const homeAngles = clampAllJoints({ ...HOME_ANGLES })
         useStore.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
-          fromPlatform: currentPlatform, toPlatform: { ...HOME_PLATFORM },
+          fromPlatform: currentPlatform, toPlatform: { ...store.homePlatform },
         })
         store.addLog('info', 'Returning to HOME…')
       } else {
-        // grabbing / releasing: hold pose
         useStore.setState({
           fromAngles: currentAngles, toAngles: currentAngles,
           fromPlatform: currentPlatform, toPlatform: currentPlatform,
@@ -159,28 +170,23 @@ export default function AnimationController() {
     }
 
     if (progressRef.current >= 1) {
-      _onSegmentComplete(store, animState)
+      _onSegmentComplete(useStore, store, animState)
     }
   })
 
   return null
 }
 
-/* Solve IK for the given target.  If mobile mode is on, we temporarily move
- * the platform group to its computed parked pose so the IK sees the same
- * world frame that the arm will reach into at the end of the segment.  We
- * then restore the group's current pose (the lerp will drive both to the
- * future pose together).
- */
-function _solveSegment(store, target, currentAngles, currentPlatform) {
-  const { robotRef, startObject, endObject, addLog, mobileMode, platformGroupRef } = store
+function _solveSegment(useStore, store, target, currentAngles, currentPlatform) {
+  const { robotRef, startObject, endObject, addLog, mobileMode, platformGroupRef, parkingRef } = store
   if (!robotRef) return
 
   const obj = target === 'start' ? startObject : endObject
   const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
 
-  // Pick where the platform should park for this target
-  const targetPlatform = mobileMode ? computePlatformPoseFor(obj.position) : currentPlatform
+  const targetPlatform = mobileMode
+    ? computePlatformPoseFor(obj.position, currentPlatform.position, parkingRef)
+    : currentPlatform
 
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
     X: faceCenter.x.toFixed(3),
@@ -199,7 +205,6 @@ function _solveSegment(store, target, currentAngles, currentPlatform) {
 
   const solved = solveCCDIK(robotRef, faceCenter, toolZ, 160, 0.005)
 
-  // Restore group to its current pose (the lerp will drive it from here)
   if (mobileMode && group && savedPos && savedRot) {
     group.position.copy(savedPos)
     group.rotation.copy(savedRot)
@@ -224,9 +229,6 @@ function _solveSegment(store, target, currentAngles, currentPlatform) {
   }
 }
 
-/* Directly poke a THREE.Group's transform.  Used during IK solves so the
- * group reflects the hypothetical platform pose without going through a
- * React render cycle.  Also called from follow mode for instant snapping. */
 function _setGroupPose(group, pose) {
   if (!group) return
   group.position.set(pose.position[0], pose.position[1], pose.position[2])
@@ -234,7 +236,7 @@ function _setGroupPose(group, pose) {
   group.updateMatrixWorld(true)
 }
 
-function _onSegmentComplete(store, current) {
+function _onSegmentComplete(useStore, store, current) {
   const { addLog, setAnimState, robotRef } = store
   const currentAngles = robotRef
     ? Object.fromEntries(JOINT_NAMES.map((n) => [n, robotRef.joints[n]?.angle ?? 0]))

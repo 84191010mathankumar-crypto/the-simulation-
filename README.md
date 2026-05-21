@@ -41,9 +41,27 @@ The terminal will show something like `Local: http://localhost:5173/` — open t
 
 If something looks wrong — robot is white, meshes missing — you almost certainly haven't run `npm install` yet, or you're opening a stale tab.  Stop the server (`Ctrl+C` in the terminal), run `npm install`, then `npm run dev` again.
 
-### Running the warehouse example (stub)
+### Running the warehouse example
 
-The same `npm run dev` server also serves a second page at **[/examples/warehouse/](http://localhost:5173/examples/warehouse/)** — a placeholder that imports the library and is the intended home for the multi-robot "rebuild the space" scene.  Open the URL directly in your browser; no extra command needed.
+The same `npm run dev` server also serves a second page at **[/examples/warehouse/](http://localhost:5173/examples/warehouse/)** — a multi-robot pick-and-place demo in a 20 × 20 m room.  Open the URL in your browser; no extra command needed.
+
+- Move the **Robots** slider (1–6) to pick how many arms are in the scene.
+- Click **Start**.  The scheduler assigns each box to the robot whose AGV is currently closest, and the robots execute the same pick → grab → move → release → return sequence as the main demo.
+- Click **Reset** to put every box back and re-arm the run.
+
+**Defining your own scenario:** edit [examples/warehouse/script.js](examples/warehouse/script.js).  Each box is one line:
+
+```js
+{ id: 'A',           // any unique string
+  size: [w, h, d],   // box dimensions in metres
+  from: [x, y, z],   // world position at scene start
+  to:   [x, y, z],   // world position where you want it placed
+  grab: [gx, gy, gz] // unit vector in the box's LOCAL frame pointing OUT of
+                     // the face the gripper approaches.  [0,1,0] = top.
+},
+```
+
+Save the file and the dev server hot-reloads the scene.
 
 ---
 
