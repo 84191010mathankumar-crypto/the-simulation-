@@ -7,7 +7,8 @@ Two demos in one app:
 - **Single arm** — drag two pose targets around and watch the arm pick from one and place at the other. Toggle **Mobile platform** and the arm rides an AGV that drives itself to within reach.
 - **Warehouse** — a swarm of robots assembles a house (or a ziggurat) from scattered crates in a 20 × 20 m room. Pick a scenario, set the fleet size, hit Start.
 
-Live: **<https://hellguz.github.io/robo-playground/>** · Warehouse demo: **<https://hellguz.github.io/robo-playground/examples/warehouse/>**
+- Live: **<https://hellguz.github.io/robo-playground/>**
+- Warehouse demo: **<https://hellguz.github.io/robo-playground/examples/warehouse/>**
 
 ---
 
