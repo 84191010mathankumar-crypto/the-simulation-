@@ -60,7 +60,7 @@ export default function Panel({
         <section className="section editor-section">
           <div className="section-head">
             <span className="sec-num">01·b</span>
-            <span className="sec-title">Script</span>
+            <span className="sec-title">Build plan</span>
           </div>
           <CodeEditor
             value={customCode}

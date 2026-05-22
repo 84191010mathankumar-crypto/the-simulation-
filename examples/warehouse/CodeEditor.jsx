@@ -1,40 +1,64 @@
 import React, { useCallback, useRef } from 'react'
 
-/* Minimal regex-based JS tokenizer.  Order in the alternation matters:
- * comments and strings are matched first so their innards don't get
- * re-tokenized as keywords. */
-const TOKEN_RE = new RegExp([
-  /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/.source,                                      // 1: comment
-  /('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)/.source,         // 2: string
-  /\b(const|let|var|return|function|if|else|for|while|do|new|in|of|true|false|null|undefined|this|typeof|break|continue|switch|case|default)\b/.source, // 3: keyword
-  /\b(Math|Array|Object|JSON|console)\b/.source,                                // 4: builtin
-  /\b(\d+\.?\d*|\.\d+)\b/.source,                                               // 5: number
-  /([+\-*/%=<>!&|?:^~]+)/.source,                                               // 6: operator
-  /([{}()\[\];,.])/.source,                                                     // 7: punct
-].join('|'), 'g')
-
+/* Minimal tokenizer for the warehouse build-plan DSL.
+ *
+ *   # comments
+ *   numbers      (3, 1.5, -0.18, …)
+ *   names        (identifier at column 0 — start of a block)
+ *   keys         (identifier followed by `:`)
+ *   ,            (tuple separator)
+ *
+ * Anything else renders in the default text colour. */
 function escape(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function highlight(code) {
-  let out = '', last = 0, m
-  TOKEN_RE.lastIndex = 0
-  while ((m = TOKEN_RE.exec(code)) !== null) {
-    if (m.index > last) out += escape(code.slice(last, m.index))
-    if      (m[1]) out += `<span class="t-cmt">${escape(m[1])}</span>`
-    else if (m[2]) out += `<span class="t-str">${escape(m[2])}</span>`
-    else if (m[3]) out += `<span class="t-kw">${escape(m[3])}</span>`
-    else if (m[4]) out += `<span class="t-builtin">${escape(m[4])}</span>`
-    else if (m[5]) out += `<span class="t-num">${escape(m[5])}</span>`
-    else if (m[6]) out += `<span class="t-op">${escape(m[6])}</span>`
-    else if (m[7]) out += `<span class="t-pn">${escape(m[7])}</span>`
+function highlightLine(line) {
+  // Comment runs to end-of-line.
+  const hashAt = line.indexOf('#')
+  let head = line, comment = ''
+  if (hashAt >= 0) {
+    head    = line.slice(0, hashAt)
+    comment = `<span class="t-cmt">${escape(line.slice(hashAt))}</span>`
+  }
+
+  // Block-name line: starts in column 0 with an identifier and no ':'.
+  if (/^[A-Za-z0-9_\-]+\s*$/.test(head)) {
+    return `<span class="t-kw">${escape(head)}</span>${comment}`
+  }
+
+  // Field line: leading whitespace, then "key:" then value.
+  const fieldMatch = head.match(/^(\s+)([A-Za-z][A-Za-z\-]*)(\s*:\s*)(.*)$/)
+  if (fieldMatch) {
+    const [, ws, key, sep, val] = fieldMatch
+    return escape(ws)
+         + `<span class="t-builtin">${escape(key)}</span>`
+         + `<span class="t-pn">${escape(sep)}</span>`
+         + highlightValue(val)
+         + comment
+  }
+
+  // Anything else — just numbers/commas in the value.
+  return highlightValue(head) + comment
+}
+
+function highlightValue(text) {
+  let out = ''
+  // Match numbers and commas; leave the rest as text.
+  const re = /(-?\d+\.?\d*|-?\.\d+)|(,)/g
+  let last = 0, m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out += escape(text.slice(last, m.index))
+    if      (m[1]) out += `<span class="t-num">${escape(m[1])}</span>`
+    else if (m[2]) out += `<span class="t-pn">${escape(m[2])}</span>`
     last = m.index + m[0].length
   }
-  if (last < code.length) out += escape(code.slice(last))
-  // Trailing newline guarantees the <pre> matches textarea height when the
-  // user's last line ends with \n.
-  return out + '\n'
+  if (last < text.length) out += escape(text.slice(last))
+  return out
+}
+
+function highlight(code) {
+  return code.split('\n').map(highlightLine).join('\n') + '\n'
 }
 
 export default function CodeEditor({ value, onChange, error, disabled }) {

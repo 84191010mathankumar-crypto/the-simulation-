@@ -141,89 +141,163 @@ export const SCENARIOS = [
 export const boxes = SCENARIOS[0].boxes
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Custom scenario starter — shown in the live editor as initial code.
+// Custom-scenario DSL — shown in the live editor as initial text.
 //
-// User code is evaluated as the body of `new Function(code)` and must `return`
-// an array of boxes.  We pre-fill it with the House example so newcomers have
-// something working to mutate.
+// One block per box.  A non-indented line is a box name; the indented lines
+// below it are its fields (`key: value`).  Order of blocks = build order;
+// use `tier: N` to make a box wait for lower-tier boxes to finish.
+//
+//   size: w, h, d                (meters)
+//   from: x, y, z                (pickup position, meters)
+//   to:   x, y, z                (target position, meters)
+//   rot:  yaw                    (pickup orientation, degrees around Y;
+//                                 or `rx, ry, rz` for full XYZ)
+//   to-rot: yaw                  (target orientation, defaults to 0)
+//   tier: N                      (build tier, defaults to 0)
+//
+// Grab face is always the top of the box.  Lines starting with `#` are comments.
 // ═══════════════════════════════════════════════════════════════════════════
-export const DEFAULT_CUSTOM_CODE = `// Write JavaScript that returns an array of boxes.
-// Each box: { id, size:[w,h,d], from:[x,y,z], to:[x,y,z],
-//             fromRotation, toRotation, grab, priority }
-//
-// • from / to are world positions
-// • grab is the box-local normal the gripper approaches from
-// • priority enforces build order (lower runs first)
-//
-// The scene updates as you type. Try changing HOUSE_X or WALL_H.
+export const DEFAULT_CUSTOM_CODE = `# House build plan.
+# Each block is one box. Fields are indented "key: value" lines.
+# Order = build order. Use \`tier:\` to defer a box.
 
-const TOP = [0, 1, 0]
-const HALF_PI = Math.PI / 2
+wall-N
+  size: 3, 1, 0.18
+  from: -7, 0.5, -6
+  rot:  90
+  to:   6, 0.5, -1.5
 
-const HOUSE_X = 6, HOUSE_Z = 0
-const HOUSE_W = 3.0, HOUSE_D = 3.0
-const WALL_H = 1.0, WALL_T = 0.18
-const ROOF_T = 0.12, ROOF_OVERHANG = 0.25
-const PICK_X = -7
-const wallY = WALL_H / 2
-const halfW = HOUSE_W / 2, halfD = HOUSE_D / 2
+wall-S
+  size: 3, 1, 0.18
+  from: -7, 0.5, -2
+  rot:  -90
+  to:   6, 0.5, 1.5
 
-return [
-  { id: 'wall-N', size: [HOUSE_W, WALL_H, WALL_T],
-    from: [PICK_X, wallY, -6], to: [HOUSE_X, wallY, HOUSE_Z - halfD],
-    fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 0 },
-  { id: 'wall-S', size: [HOUSE_W, WALL_H, WALL_T],
-    from: [PICK_X, wallY, -2], to: [HOUSE_X, wallY, HOUSE_Z + halfD],
-    fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 0 },
-  { id: 'wall-E', size: [WALL_T, WALL_H, HOUSE_D],
-    from: [PICK_X, wallY, 1], to: [HOUSE_X + halfW, wallY, HOUSE_Z],
-    fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 0 },
-  { id: 'wall-W', size: [WALL_T, WALL_H, HOUSE_D],
-    from: [PICK_X, wallY, 2.5], to: [HOUSE_X - halfW, wallY, HOUSE_Z],
-    fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 0 },
-  { id: 'step', size: [0.8, 0.15, 0.3],
-    from: [PICK_X - 1, 0.075, 4], to: [HOUSE_X, 0.075, HOUSE_Z + halfD + 0.15],
-    fromRotation: [0, 0.35, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 0 },
-  { id: 'roof', size: [HOUSE_W + 2 * ROOF_OVERHANG, ROOF_T, HOUSE_D + 2 * ROOF_OVERHANG],
-    from: [PICK_X - 1, ROOF_T / 2, 7], to: [HOUSE_X, WALL_H + ROOF_T / 2, HOUSE_Z],
-    fromRotation: [0, HALF_PI, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 1 },
-  { id: 'chimney', size: [0.3, 0.45, 0.3],
-    from: [PICK_X - 1, 0.225, -9],
-    to: [HOUSE_X + 0.8, WALL_H + ROOF_T + 0.225, HOUSE_Z - 0.8],
-    fromRotation: [0, Math.PI / 4, 0], toRotation: [0, 0, 0],
-    grab: TOP, priority: 2 },
-]
+wall-E
+  size: 0.18, 1, 3
+  from: -7, 0.5, 1
+  rot:  90
+  to:   7.5, 0.5, 0
+
+wall-W
+  size: 0.18, 1, 3
+  from: -7, 0.5, 2.5
+  rot:  -90
+  to:   4.5, 0.5, 0
+
+step
+  size: 0.8, 0.15, 0.3
+  from: -8, 0.075, 4
+  rot:  20
+  to:   6, 0.075, 1.65
+
+roof
+  size: 3.5, 0.12, 3.5
+  from: -8, 0.06, 7
+  rot:  90
+  to:   6, 1.06, 0
+  tier: 1
+
+chimney
+  size: 0.3, 0.45, 0.3
+  from: -8, 0.225, -9
+  rot:  45
+  to:   6.8, 1.345, -0.8
+  tier: 2
 `
 
-// Parse a user-written code string into a boxes array.  Returns
-// { boxes, error } — on parse failure, boxes is null and error is a string.
-export function parseCustomCode(code) {
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function(code)
-    const result = fn()
-    if (!Array.isArray(result)) {
-      return { boxes: null, error: 'Code must return an array of boxes' }
+// ── DSL parser ────────────────────────────────────────────────────────────
+const D2R = Math.PI / 180
+
+function parseTuple(s, n) {
+  const parts = s.split(',').map((x) => parseFloat(x.trim()))
+  if (parts.length !== n) return null
+  if (parts.some((v) => !isFinite(v))) return null
+  return parts
+}
+
+function parseRot(s) {
+  const parts = s.split(',').map((x) => parseFloat(x.trim()))
+  if (parts.some((v) => !isFinite(v))) return null
+  if (parts.length === 1) return [0, parts[0] * D2R, 0]
+  if (parts.length === 3) return parts.map((v) => v * D2R)
+  return null
+}
+
+const NAME_RE = /^[A-Za-z0-9_\-]+$/
+const FIELD_RE = /^\s+([A-Za-z][A-Za-z\-]*)\s*:\s*(.+?)\s*$/
+
+/**
+ * Parses the editor's DSL text into a boxes array.
+ * Returns { boxes, error }: on failure, boxes is null and error names the
+ * offending block + line.
+ */
+export function parseCustomCode(text) {
+  const boxes = []
+  const seen = new Set()
+  const lines = String(text).split('\n')
+  let block = null
+
+  const finalize = () => {
+    if (!block) return null
+    const f = block.fields
+    for (const k of ['size', 'from', 'to']) {
+      if (!(k in f)) return `Block "${block.name}" (line ${block.line}): missing required field "${k}"`
     }
-    const seen = new Set()
-    for (let i = 0; i < result.length; i++) {
-      const b = result[i]
-      if (!b || typeof b !== 'object')   return { boxes: null, error: `Box ${i} is not an object` }
-      if (!b.id || typeof b.id !== 'string') return { boxes: null, error: `Box ${i} is missing string id` }
-      if (seen.has(b.id))                return { boxes: null, error: `Duplicate id "${b.id}"` }
-      seen.add(b.id)
-      if (!Array.isArray(b.size) || b.size.length !== 3) return { boxes: null, error: `Box "${b.id}" needs size:[w,h,d]` }
-      if (!Array.isArray(b.from) || b.from.length !== 3) return { boxes: null, error: `Box "${b.id}" needs from:[x,y,z]` }
-      if (!Array.isArray(b.to)   || b.to.length   !== 3) return { boxes: null, error: `Box "${b.id}" needs to:[x,y,z]` }
+    const size = parseTuple(f.size, 3)
+    if (!size) return `"${block.name}".size — expected "w, h, d"`
+    const from = parseTuple(f.from, 3)
+    if (!from) return `"${block.name}".from — expected "x, y, z"`
+    const to = parseTuple(f.to, 3)
+    if (!to) return `"${block.name}".to — expected "x, y, z"`
+    const rot = f.rot != null ? parseRot(f.rot) : [0, 0, 0]
+    if (!rot) return `"${block.name}".rot — expected yaw degrees or "rx, ry, rz"`
+    const toRotKey = f['to-rot'] != null ? f['to-rot'] : null
+    const toRot = toRotKey != null ? parseRot(toRotKey) : [0, 0, 0]
+    if (!toRot) return `"${block.name}".to-rot — expected yaw degrees or "rx, ry, rz"`
+    let tier = 0
+    if (f.tier != null) {
+      tier = parseInt(f.tier, 10)
+      if (!Number.isFinite(tier)) return `"${block.name}".tier — must be an integer`
     }
-    return { boxes: result, error: null }
-  } catch (e) {
-    return { boxes: null, error: e.message }
+    if (seen.has(block.name)) return `Duplicate box name "${block.name}"`
+    seen.add(block.name)
+    boxes.push({
+      id: block.name,
+      size, from, to,
+      fromRotation: rot,
+      toRotation: toRot,
+      grab: TOP,
+      priority: tier,
+    })
+    block = null
+    return null
   }
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].replace(/#.*$/, '').replace(/\s+$/, '')
+    if (!raw.trim()) continue
+
+    if (/^\s/.test(raw)) {
+      // Indented → a field on the current block.
+      if (!block) return { boxes: null, error: `Line ${i + 1}: indented field "${raw.trim()}" with no preceding box name` }
+      const m = raw.match(FIELD_RE)
+      if (!m) return { boxes: null, error: `Line ${i + 1}: expected "key: value", got "${raw.trim()}"` }
+      const key = m[1].toLowerCase()
+      if (key in block.fields) return { boxes: null, error: `Line ${i + 1}: duplicate field "${key}" in box "${block.name}"` }
+      block.fields[key] = m[2]
+    } else {
+      // Column 0 → finalize previous block (if any), start a new one.
+      const err = finalize()
+      if (err) return { boxes: null, error: err }
+      const name = raw.trim()
+      if (!NAME_RE.test(name)) return { boxes: null, error: `Line ${i + 1}: invalid box name "${name}" (use letters, digits, "_" or "-")` }
+      block = { name, fields: {}, line: i + 1 }
+    }
+  }
+
+  const err = finalize()
+  if (err) return { boxes: null, error: err }
+
+  return { boxes, error: null }
 }

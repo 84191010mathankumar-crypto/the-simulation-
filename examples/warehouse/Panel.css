@@ -628,7 +628,8 @@ input[type=range]::-moz-range-thumb {
   letter-spacing: 0;
   tab-size: 2;
   white-space: pre;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   background: transparent;
 }
 
