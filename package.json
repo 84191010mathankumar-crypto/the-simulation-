@@ -1,5 +1,5 @@
 {
-  "name": "roboclaw",
+  "name": "robo-playground",
   "version": "0.1.0",
   "description": "React + Three.js library for simulating a 6-axis KUKA robot arm doing pick-and-place tasks on a static pedestal or a mobile platform.",
   "private": true,

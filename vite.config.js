@@ -13,6 +13,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 // any .html file by path, so the rollupOptions.input below is only needed
 // so production `npm run build` emits both bundles.
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS ? '/robo-playground/' : '/',
   plugins: [react()],
   resolve: {
     alias: {

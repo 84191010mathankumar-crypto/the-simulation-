@@ -8,13 +8,14 @@ import React from 'react'
  * component drops into both entry points unchanged.
  */
 export default function Nav() {
+  const base = import.meta.env.BASE_URL || '/'
   const path = typeof window !== 'undefined' ? window.location.pathname : '/'
   const current = path.includes('/examples/warehouse') ? 'warehouse' : 'arm'
 
   return (
     <nav className="page-nav" aria-label="Demos">
       <a
-        href="/"
+        href={base}
         className={`pn-tab ${current === 'arm' ? 'active' : ''}`}
         aria-current={current === 'arm' ? 'page' : undefined}
       >
@@ -27,7 +28,7 @@ export default function Nav() {
         <span>Single arm</span>
       </a>
       <a
-        href="/examples/warehouse/"
+        href={`${base}examples/warehouse/`}
         className={`pn-tab ${current === 'warehouse' ? 'active' : ''}`}
         aria-current={current === 'warehouse' ? 'page' : undefined}
       >
