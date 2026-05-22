@@ -23,6 +23,7 @@ export { default as RobotArm,
   from './components/RobotArm.jsx'
 export { default as AnimationController } from './components/AnimationController.jsx'
 export { default as WorkObject, BOX_HALF }  from './components/WorkObject.jsx'
+export { default as CarriedObject }         from './components/CarriedObject.jsx'
 export { default as WorkingEnvelope }       from './components/WorkingEnvelope.jsx'
 
 // State (the global store + factory for multi-robot use)

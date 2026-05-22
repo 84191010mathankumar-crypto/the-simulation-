@@ -7,7 +7,7 @@ import {
   GizmoViewport,
 } from '@react-three/drei'
 import * as THREE from 'three'
-import { RobotArm, WorkObject, AnimationController, useStore } from '../lib'
+import { RobotArm, WorkObject, CarriedObject, AnimationController, useStore } from '../lib'
 import './SceneView.css'
 
 /* ─── Static pedestal — bolted, circular, doesn't move ─────── */
@@ -183,6 +183,7 @@ export default function SceneView() {
           <RobotBase mobileMode={mobileMode} />
           <WorkObject objectKey="start" color="#c15f3c" />
           <WorkObject objectKey="end"   color="#4a6ea3" />
+          <CarriedObject color="#e0a050" />
           <AnimationController />
         </Suspense>
 
