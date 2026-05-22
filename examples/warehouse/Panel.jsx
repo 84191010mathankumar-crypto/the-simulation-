@@ -1,8 +1,13 @@
 import React from 'react'
 
-export default function Panel({ robotCount, setRobotCount, onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal }) {
+export default function Panel({
+  robotCount, setRobotCount,
+  scenarios, scenarioId, onScenarioChange,
+  onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal,
+}) {
   const allLoaded = loadedCount >= robotsTotal
   const total = taskCounts.pending + taskCounts.assigned + taskCounts.done
+  const scenario = scenarios.find((s) => s.id === scenarioId) || scenarios[0]
 
   return (
     <aside className="warehouse-panel">
@@ -12,12 +17,33 @@ export default function Panel({ robotCount, setRobotCount, onStart, onReset, run
           <span className="edition">Vol. 02 · Warehouse</span>
         </div>
         <h1>Multi-<em>fleet</em> floor</h1>
-        <div className="sub">Pick &amp; place choreography · {total} tasks</div>
+        <div className="sub">{scenario.description} · {total} tasks</div>
       </div>
 
       <section className="section">
         <div className="section-head">
           <span className="sec-num">01</span>
+          <span className="sec-title">Scenario</span>
+        </div>
+        <div className="segmented" role="tablist">
+          {scenarios.map((s) => (
+            <button
+              key={s.id}
+              role="tab"
+              aria-selected={s.id === scenarioId}
+              className={`seg-btn ${s.id === scenarioId ? 'active' : ''}`}
+              disabled={running}
+              onClick={() => onScenarioChange(s.id)}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <span className="sec-num">02</span>
           <span className="sec-title">Fleet size</span>
         </div>
         <div className="robot-control">
@@ -42,7 +68,7 @@ export default function Panel({ robotCount, setRobotCount, onStart, onReset, run
 
       <section className="section">
         <div className="section-head">
-          <span className="sec-num">02</span>
+          <span className="sec-num">03</span>
           <span className="sec-title">Dispatch</span>
         </div>
         <div className="btn-row">
@@ -62,7 +88,7 @@ export default function Panel({ robotCount, setRobotCount, onStart, onReset, run
 
       <section className="section">
         <div className="section-head">
-          <span className="sec-num">03</span>
+          <span className="sec-num">04</span>
           <span className="sec-title">Task ledger</span>
         </div>
         <div className="status-grid">
@@ -83,7 +109,7 @@ export default function Panel({ robotCount, setRobotCount, onStart, onReset, run
 
       <section className="section log">
         <div className="section-head">
-          <span className="sec-num">04</span>
+          <span className="sec-num">05</span>
           <span className="sec-title">Event log</span>
         </div>
         <div className="log-list">
@@ -99,8 +125,8 @@ export default function Panel({ robotCount, setRobotCount, onStart, onReset, run
       </section>
 
       <div className="colophon">
-        <span>v0.1 · Warehouse demo</span>
-        <span>{robotsTotal} arms online</span>
+        <span>{scenario.name} · {scenario.boxes.length} pieces</span>
+        <span>{robotsTotal} arms</span>
       </div>
     </aside>
   )

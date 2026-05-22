@@ -19,7 +19,7 @@ import { createRobotStore } from 'roboclaw'
 
 import WarehouseScene from './WarehouseScene'
 import Panel from './Panel'
-import { boxes as scenarioBoxes, ROOM_SIZE } from './script'
+import { SCENARIOS, ROOM_SIZE } from './script'
 import { createScheduler } from './scheduler'
 
 import './Panel.css'
@@ -41,10 +41,18 @@ function makeRobotHomes(n, roomSize) {
 
 function App() {
   const [robotCount, setRobotCount] = useState(2)
+  const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
   const [running, setRunning] = useState(false)
   const [logs, setLogs] = useState([])
-  const [taskCounts, setTaskCounts] = useState({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
   const [loadedCount, setLoadedCount] = useState(0)
+
+  const scenario = useMemo(
+    () => SCENARIOS.find((s) => s.id === scenarioId) || SCENARIOS[0],
+    [scenarioId],
+  )
+  const scenarioBoxes = scenario.boxes
+
+  const [taskCounts, setTaskCounts] = useState({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
 
   /* Stable bank of stores — grow on demand, never shrink.
    *
@@ -83,11 +91,11 @@ function App() {
     else meshRefs.current.delete(id)
   }, [])
 
-  // Re-build the boxes-with-meshRef list each render (cheap, same refs).
-  const boxesForScene = useMemo(() => scenarioBoxes.map((b) => ({ ...b })), [])
+  // Re-build the boxes-with-meshRef list when the scenario changes.
+  const boxesForScene = useMemo(() => scenarioBoxes.map((b) => ({ ...b })), [scenarioBoxes])
   const boxesForScheduler = useMemo(
     () => scenarioBoxes.map((b) => ({ ...b, meshRef: { get current() { return meshRefs.current.get(b.id) } } })),
-    []
+    [scenarioBoxes]
   )
 
   // Local log function — also called by the scheduler.
@@ -138,11 +146,26 @@ function App() {
     setTaskCounts({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
   }
 
+  // When the user picks a different scenario, reset everything so the new
+  // boxes appear in their pickup positions and the scheduler restarts.
+  const onScenarioChange = (id) => {
+    if (running) return
+    setScenarioId(id)
+    setLogs([])
+    setTaskCounts({
+      pending: (SCENARIOS.find((s) => s.id === id) || SCENARIOS[0]).boxes.length,
+      assigned: 0, done: 0,
+    })
+  }
+
   return (
     <div className="app">
       <Panel
         robotCount={robotCount}
         setRobotCount={setRobotCount}
+        scenarios={SCENARIOS}
+        scenarioId={scenarioId}
+        onScenarioChange={onScenarioChange}
         onStart={onStart}
         onReset={onReset}
         running={running}

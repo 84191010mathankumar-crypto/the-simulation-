@@ -1,127 +1,154 @@
 /**
- * Warehouse scenario — build a small house from wall slabs.
+ * Warehouse scenarios.
  *
- * The pickup zone sits on the west side of the room (negative X); the robots
- * carry pieces east and assemble them into a 3 × 3 m house with a roof and
- * a chimney.  Edit the constants below to resize the house or change where
- * the pieces start; the layout below is self-contained.
+ * Each scenario describes a pickup-and-place job for the robots. Edit existing
+ * ones or add a new entry to `SCENARIOS` — the UI picks them up automatically.
  *
- * Each box entry has:
- *   id            — unique string
- *   size          — [w, h, d] in metres (box-local axes)
- *   from          — [x, y, z] world position of the box's centre at scene start
- *   to            — [x, y, z] world position where the robot should deposit it
- *   fromRotation  — [rx, ry, rz] world-frame Euler at pickup (so the boxes
- *                   look 'scattered' on the floor)
- *   toRotation    — [rx, ry, rz] world-frame Euler at the drop location
- *                   (usually all zeros so the size array directly defines the
- *                   final orientation)
- *   grab          — unit vector in the BOX'S LOCAL frame pointing OUT of the
- *                   face the gripper approaches.  [0, 1, 0] = grab from on top.
- *   priority      — small integer; the scheduler only picks pending tasks
- *                   with the lowest priority currently available.  Use this
- *                   to enforce a build order (walls before roof, roof before
- *                   chimney, …).
+ * Box entry fields (see also examples/warehouse/scheduler.js):
+ *   id, size, from, to, fromRotation, toRotation, grab, priority
  *
- * The y component is normally the box's half-height so the bottom sits flat
- * on the floor (y = 0).
+ * The y component of `from` / `to` is normally the box's half-height so the
+ * bottom sits flat on the floor (y = 0).
  */
 export const ROOM_SIZE = 20
 export const FLOOR_Y   = 0
 
 const TOP = [0, 1, 0]
-
-// ── House parameters ───────────────────────────────────────────────────────
-const HOUSE_X   = 6        // centre of the house, world X
-const HOUSE_Z   = 0        // centre of the house, world Z
-const HOUSE_W   = 3.0      // outer width  (X extent)
-const HOUSE_D   = 3.0      // outer depth  (Z extent)
-const WALL_H    = 1.0      // wall height
-const WALL_T    = 0.18     // wall thickness
-const ROOF_T    = 0.12     // roof slab thickness
-const ROOF_OVERHANG = 0.25 // roof extends this much past the walls on each side
-
-// ── Pickup zone (west wall) ────────────────────────────────────────────────
-const PICK_X = -7          // pickup column
-const wallY  = WALL_H / 2  // wall centre Y while it's sitting on the floor
-
-// Half extents so the wall slabs end up flush at the house corners.
-const halfW = HOUSE_W / 2
-const halfD = HOUSE_D / 2
-
 const HALF_PI = Math.PI / 2
 
-export const boxes = [
-  // ── Four outer walls ─────────────────────────────────────────────────────
-  // North + south walls: at pickup they're rotated 90° about Y so their long
-  // edge runs along Z; the robot rotates them back to lie along X.
-  { id: 'wall-N',
-    size: [HOUSE_W, WALL_H, WALL_T],
-    from: [PICK_X, wallY, -4],
-    to:   [HOUSE_X, wallY, HOUSE_Z - halfD],
-    fromRotation: [0,  HALF_PI, 0],
-    toRotation:   [0, 0, 0],
-    grab: TOP,
-    priority: 0 },
+// ═══════════════════════════════════════════════════════════════════════════
+// Scenario 1 — House
+// ═══════════════════════════════════════════════════════════════════════════
+function buildHouseScenario() {
+  const HOUSE_X = 6, HOUSE_Z = 0
+  const HOUSE_W = 3.0, HOUSE_D = 3.0
+  const WALL_H = 1.0, WALL_T = 0.18
+  const ROOF_T = 0.12, ROOF_OVERHANG = 0.25
+  const PICK_X = -7
+  const wallY = WALL_H / 2
+  const halfW = HOUSE_W / 2, halfD = HOUSE_D / 2
 
-  { id: 'wall-S',
-    size: [HOUSE_W, WALL_H, WALL_T],
-    from: [PICK_X, wallY, -2],
-    to:   [HOUSE_X, wallY, HOUSE_Z + halfD],
-    fromRotation: [0, -HALF_PI, 0],
-    toRotation:   [0, 0, 0],
-    grab: TOP,
-    priority: 0 },
+  const boxes = [
+    { id: 'h-wall-N', size: [HOUSE_W, WALL_H, WALL_T],
+      from: [PICK_X, wallY, -4], to: [HOUSE_X, wallY, HOUSE_Z - halfD],
+      fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
+    { id: 'h-wall-S', size: [HOUSE_W, WALL_H, WALL_T],
+      from: [PICK_X, wallY, -2], to: [HOUSE_X, wallY, HOUSE_Z + halfD],
+      fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
+    { id: 'h-wall-E', size: [WALL_T, WALL_H, HOUSE_D],
+      from: [PICK_X, wallY, 0], to: [HOUSE_X + halfW, wallY, HOUSE_Z],
+      fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
+    { id: 'h-wall-W', size: [WALL_T, WALL_H, HOUSE_D],
+      from: [PICK_X, wallY, 2], to: [HOUSE_X - halfW, wallY, HOUSE_Z],
+      fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
+    { id: 'h-step', size: [0.8, 0.15, 0.3],
+      from: [PICK_X - 1, 0.075, 5], to: [HOUSE_X, 0.075, HOUSE_Z + halfD + 0.15],
+      fromRotation: [0, 0.35, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
+    { id: 'h-roof', size: [HOUSE_W + 2 * ROOF_OVERHANG, ROOF_T, HOUSE_D + 2 * ROOF_OVERHANG],
+      from: [PICK_X - 1, ROOF_T / 2, 4], to: [HOUSE_X, WALL_H + ROOF_T / 2, HOUSE_Z],
+      fromRotation: [0, HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 1 },
+    { id: 'h-chimney', size: [0.3, 0.45, 0.3],
+      from: [PICK_X - 1, 0.225, -5], to: [HOUSE_X + 0.8, WALL_H + ROOF_T + 0.225, HOUSE_Z - 0.8],
+      fromRotation: [0, Math.PI / 4, 0], toRotation: [0, 0, 0], grab: TOP, priority: 2 },
+  ]
 
-  // East + west walls: long along Z in their final pose; pre-rotated so they
-  // sit long-along-X at pickup, will rotate 90° during transit.
-  { id: 'wall-E',
-    size: [WALL_T, WALL_H, HOUSE_D],
-    from: [PICK_X, wallY, 0],
-    to:   [HOUSE_X + halfW, wallY, HOUSE_Z],
-    fromRotation: [0,  HALF_PI, 0],
-    toRotation:   [0, 0, 0],
-    grab: TOP,
-    priority: 0 },
+  return {
+    id: 'house',
+    name: 'House',
+    description: 'Assemble walls, roof and chimney',
+    roomSize: ROOM_SIZE,
+    boxes,
+  }
+}
 
-  { id: 'wall-W',
-    size: [WALL_T, WALL_H, HOUSE_D],
-    from: [PICK_X, wallY, 2],
-    to:   [HOUSE_X - halfW, wallY, HOUSE_Z],
-    fromRotation: [0, -HALF_PI, 0],
-    toRotation:   [0, 0, 0],
-    grab: TOP,
-    priority: 0 },
+// ═══════════════════════════════════════════════════════════════════════════
+// Scenario 2 — Ziggurat
+//
+// A 3-tier stepped pyramid built from 14 crates that arrive scattered in a
+// pile on the west side of the room. Priorities enforce the build order:
+//   base (3×3, p=0) → mid (2×2, p=1) → cap (1, p=2).
+// ═══════════════════════════════════════════════════════════════════════════
+function buildZigguratScenario() {
+  const CENTRE_X = 6, CENTRE_Z = 0
+  const PICK_X   = -7
+  const C        = 0.5            // crate edge length (cube)
+  const GAP      = 0.04           // gap between crates
+  const STEP     = C + GAP
 
-  // ── Doorstep ─ flat slab; arrives slightly skewed, lands square. ─────────
-  { id: 'step',
-    size: [0.8, 0.15, 0.3],
-    from: [PICK_X - 1, 0.075, 5],
-    to:   [HOUSE_X, 0.075, HOUSE_Z + halfD + 0.15],
-    fromRotation: [0,  0.35, 0],
-    toRotation:   [0, 0, 0],
-    grab: TOP,
-    priority: 0 },
+  // Deterministic pseudo-random for scattered pickup positions.
+  let seed = 1
+  const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280 }
 
-  // ── Roof (placed on top of the walls, slight overhang) ───────────────────
-  // Pre-rotated 90° so the long edge lies along Z at pickup.
-  { id: 'roof',
-    size: [HOUSE_W + 2 * ROOF_OVERHANG, ROOF_T, HOUSE_D + 2 * ROOF_OVERHANG],
-    from: [PICK_X - 1, ROOF_T / 2, 4],
-    to:   [HOUSE_X, WALL_H + ROOF_T / 2, HOUSE_Z],
-    fromRotation: [0, HALF_PI, 0],
-    toRotation:   [0, 0, 0],
-    grab: TOP,
-    priority: 1 },
+  const boxes = []
 
-  // ── Chimney (sits on the roof) ───────────────────────────────────────────
-  // Tilted at pickup; the robot straightens it out as it carries it up.
-  { id: 'chimney',
-    size: [0.3, 0.45, 0.3],
-    from: [PICK_X - 1, 0.225, -5],
-    to:   [HOUSE_X + 0.8, WALL_H + ROOF_T + 0.225, HOUSE_Z - 0.8],
-    fromRotation: [0, Math.PI / 4, 0],
+  // ── Tier 0 — 3×3 base at y = C/2 ─────────────────────────────────────────
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      const tx = CENTRE_X + (i - 1) * STEP
+      const tz = CENTRE_Z + (j - 1) * STEP
+      const px = PICK_X + (rand() - 0.5) * 2.4
+      const pz = -5 + rand() * 10
+      boxes.push({
+        id: `z-t0-${i}${j}`,
+        size: [C, C, C],
+        from: [px, C / 2, pz],
+        to:   [tx, C / 2, tz],
+        fromRotation: [0, rand() * Math.PI - Math.PI / 2, 0],
+        toRotation:   [0, 0, 0],
+        grab: TOP,
+        priority: 0,
+      })
+    }
+  }
+
+  // ── Tier 1 — 2×2 middle at y = 1.5 * C ───────────────────────────────────
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      const tx = CENTRE_X + (i - 0.5) * STEP
+      const tz = CENTRE_Z + (j - 0.5) * STEP
+      const px = PICK_X + (rand() - 0.5) * 2.4
+      const pz = -5 + rand() * 10
+      boxes.push({
+        id: `z-t1-${i}${j}`,
+        size: [C, C, C],
+        from: [px, C / 2, pz],
+        to:   [tx, 1.5 * C, tz],
+        fromRotation: [0, rand() * Math.PI - Math.PI / 2, 0],
+        toRotation:   [0, 0, 0],
+        grab: TOP,
+        priority: 1,
+      })
+    }
+  }
+
+  // ── Tier 2 — single cap crate at y = 2.5 * C ─────────────────────────────
+  boxes.push({
+    id: 'z-cap',
+    size: [C, C, C],
+    from: [PICK_X + (rand() - 0.5) * 2.4, C / 2, -5 + rand() * 10],
+    to:   [CENTRE_X, 2.5 * C, CENTRE_Z],
+    fromRotation: [0, rand() * Math.PI - Math.PI / 2, 0],
     toRotation:   [0, 0, 0],
     grab: TOP,
-    priority: 2 },
+    priority: 2,
+  })
+
+  return {
+    id: 'ziggurat',
+    name: 'Ziggurat',
+    description: '14-crate stepped pyramid · priorities',
+    roomSize: ROOM_SIZE,
+    boxes,
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Exports
+// ═══════════════════════════════════════════════════════════════════════════
+export const SCENARIOS = [
+  buildHouseScenario(),
+  buildZigguratScenario(),
 ]
+
+// Back-compat with old callers (and the README example).
+export const boxes = SCENARIOS[0].boxes
