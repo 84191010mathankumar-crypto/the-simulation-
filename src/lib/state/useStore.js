@@ -77,7 +77,7 @@ export function createRobotStore() {
       grabVector: [0, 1, 0],
     },
     endObject: {
-      position: [1.2, 0.3, 3.0],
+      position: [1.2, 0.3, -0.8],
       rotation: [0, 0, 0],
       grabVector: [0, 1, 0],
     },
