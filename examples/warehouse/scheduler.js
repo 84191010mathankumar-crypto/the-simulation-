@@ -267,16 +267,22 @@ export function createScheduler({ robots, boxes, onLog }) {
             task.startRotation = [...task.endRotation]
             task.carry = null
           }
-          // Skip the 'returning' (drive-home) leg when there's more work
-          // queued.  Mark the task done now and jump straight to idle so the
-          // scheduler can hand this robot the next task from its current
-          // platform position instead of round-tripping through home.
-          if (st === 'returning' && tasks.some((t) => t.state === 'pending')) {
+          // On entering 'returning', try to short-circuit straight to the
+          // next pickup instead of driving home.  We assign() right here so
+          // that other robots transitioning to 'returning' in this same tick
+          // see the task as 'assigned' and don't all try to claim it.  If no
+          // task is available, leave animState='returning' so the
+          // AnimationController finishes driving this robot home.
+          if (st === 'returning') {
             task.state = 'done'
             log('ok', `Robot ${r.id} done with box ${task.box.id}`)
             robotBusy.delete(r.id)
-            r.store.setState({ animState: 'idle', animProgress: 0 })
-            robotPrevState.set(r.id, 'idle')
+
+            const next = pickTask(r)
+            if (next) {
+              assign(r, next)
+              robotPrevState.set(r.id, 'moving_to_start')
+            }
             continue
           }
           if (st === 'idle') {
