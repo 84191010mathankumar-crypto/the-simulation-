@@ -10,8 +10,9 @@ import { applyAnglesToRobot } from '../ik/ikSolver'
 // Default runtime URLs for the bundled KUKA KR210 R2700-2 assets.
 // Vite serves anything under `public/` at the web root, so these paths work
 // out-of-the-box for any app that copies (or symlinks) `public/lib-assets`.
-export const KR210_DEFAULT_URDF        = '/lib-assets/kr210/kr210_r2700_2.urdf'
-export const KR210_DEFAULT_PACKAGE_DIR = '/lib-assets/kr210'
+const BASE = (import.meta.env && import.meta.env.BASE_URL) || '/'
+export const KR210_DEFAULT_URDF        = `${BASE}lib-assets/kr210/kr210_r2700_2.urdf`
+export const KR210_DEFAULT_PACKAGE_DIR = `${BASE}lib-assets/kr210`
 
 // Real KUKA colour scheme:
 //   base / link_1–3  → KUKA orange
