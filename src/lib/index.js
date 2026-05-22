@@ -1,5 +1,5 @@
 /**
- * roboclaw — a React + Three.js library for simulating a 6-axis robot arm
+ * robo-playground — a React + Three.js library for simulating a 6-axis robot arm
  * doing pick-and-place tasks, optionally riding on a mobile platform.
  *
  * Public surface (what an app should import):
@@ -10,7 +10,7 @@
  *     JOINT_NAMES, JOINT_LIMITS, HOME_ANGLES, WORKING_AREA,
  *     solveCCDIK, computeGrabPose, getToolPose,
  *     KR210_DEFAULT_URDF, KR210_DEFAULT_PACKAGE_DIR,
- *   } from 'roboclaw'
+ *   } from 'robo-playground'
  *
  * Single-robot apps just use `useStore` (the singleton).  Multi-robot apps
  * call `createRobotStore()` once per arm and wrap each <RobotArm> /

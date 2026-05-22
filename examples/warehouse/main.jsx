@@ -15,7 +15,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import ReactDOM from 'react-dom/client'
-import { createRobotStore } from 'roboclaw'
+import { createRobotStore } from 'robo-playground'
 
 import WarehouseScene from './WarehouseScene'
 import Panel from './Panel'

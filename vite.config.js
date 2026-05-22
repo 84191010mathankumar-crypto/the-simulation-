@@ -17,7 +17,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      roboclaw: path.resolve(here, 'src/lib/index.js'),
+      'robo-playground': path.resolve(here, 'src/lib/index.js'),
     },
   },
   optimizeDeps: { exclude: ['urdf-loader'] },

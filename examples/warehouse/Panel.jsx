@@ -17,7 +17,7 @@ export default function Panel({
     <aside className={`warehouse-panel ${drawerOpen ? 'drawer-open' : ''}`}>
       <div className="head">
         <div className="brand-line">
-          <span className="brand-mark">◐ Roboclaw</span>
+          <span className="brand-mark">◐ Robo Playground</span>
           <div className="head-right">
             <span className="edition">Vol. 02 · Warehouse</span>
             <button

@@ -4,7 +4,7 @@ import { OrbitControls, Grid, Edges, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   RobotArm, AnimationController, RobotStoreProvider,
-} from 'roboclaw'
+} from 'robo-playground'
 
 /* ─── AGV chassis (same look as main demo's MobilePlatform) ─── */
 function MobilePlatform() {
@@ -140,7 +140,7 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         <div>{robots.length === 1 ? 'unit' : 'units'} dispatched</div>
       </div>
     <Canvas
-      camera={{ position: [roomSize * 0.55, roomSize * 0.55, roomSize * 0.55], fov: 42, near: 0.1, far: 200 }}
+      camera={{ position: [roomSize * 0.9, roomSize * 0.9, roomSize * 0.9], fov: 42, near: 0.1, far: 200 }}
       shadows
       dpr={[1, 1.5]}
       gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping, powerPreference: 'high-performance' }}

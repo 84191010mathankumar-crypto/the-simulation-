@@ -27,7 +27,7 @@
  * *who does what, and when*.  Nothing here touches IK or joint angles.
  */
 import * as THREE from 'three'
-import { easeInOutCubic } from 'roboclaw'
+import { easeInOutCubic } from 'robo-playground'
 
 function dist2(a, b) {
   const dx = a[0] - b[0]

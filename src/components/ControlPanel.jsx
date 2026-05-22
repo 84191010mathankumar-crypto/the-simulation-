@@ -95,7 +95,7 @@ export default function ControlPanel() {
       {/* ── Masthead ────────────────────────────────────────── */}
       <div className="masthead">
         <div className="mast-top">
-          <span className="brand-mark">◐ Roboclaw</span>
+          <span className="brand-mark">◐ Robo Playground</span>
           <div className="mast-right">
             <span className={`status ${robotLoaded ? '' : 'off'}`}>
               <span className="status-dot" />
