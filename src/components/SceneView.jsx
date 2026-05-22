@@ -136,8 +136,14 @@ export default function SceneView() {
   return (
     <div className="scene-view">
       <div className="scene-stamp">
-        <div className="stamp-num">Fig. 01 — Workcell</div>
+        <div className="stamp-num">Fig. 01 / Workcell</div>
         <div className="stamp-title">Pick &amp; place</div>
+        <div className="stamp-rule" />
+      </div>
+      <div className="scene-axes">
+        <div className="ax-row"><span>X · forward</span><span className="swatch" style={{background:'#c34a3a'}}/></div>
+        <div className="ax-row"><span>Y · up</span><span className="swatch" style={{background:'#4f7a5b'}}/></div>
+        <div className="ax-row"><span>Z · lateral</span><span className="swatch" style={{background:'#2d5a78'}}/></div>
       </div>
       <div className="scene-hud">
         <span className="hud-label">Viewport</span>
@@ -173,10 +179,10 @@ export default function SceneView() {
           args={[18, 18]}
           cellSize={0.5}
           cellThickness={0.5}
-          cellColor="#d6cdb8"
+          cellColor="#c2cad1"
           sectionSize={2}
           sectionThickness={1.0}
-          sectionColor="#a0937a"
+          sectionColor="#8a96a2"
           fadeDistance={14}
           fadeStrength={1.4}
           followCamera={false}

@@ -3,35 +3,36 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 60% at 50% -10%, #ffffff 0%, var(--paper) 55%, var(--paper-deep) 100%);
+    radial-gradient(ellipse 80% 70% at 50% -20%, #ffffff 0%, #eef2f5 45%, #d9e0e6 100%);
 }
 
-/* Frame overlay — large hairline border + tickmarks like a draftsman's sheet */
+/* Hairline outer border */
 .scene-view::before {
   content: '';
   position: absolute;
-  inset: 18px;
+  inset: 14px;
   border: 1px solid var(--rule);
   pointer-events: none;
   z-index: 1;
 }
 
-/* Corner crop marks */
+/* Subtle crop marks at the corners */
 .scene-view::after {
   content: '';
   position: absolute;
-  inset: 14px;
+  inset: 10px;
   background:
-    linear-gradient(var(--ink), var(--ink)) 0 0 / 14px 1px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 0 0 / 1px 14px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 100% 0 / 14px 1px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 100% 0 / 1px 14px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 0 100% / 14px 1px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 0 100% / 1px 14px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 100% 100% / 14px 1px no-repeat,
-    linear-gradient(var(--ink), var(--ink)) 100% 100% / 1px 14px no-repeat;
+    linear-gradient(var(--ink), var(--ink)) 0 0 / 12px 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 0 0 / 1px 12px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 100% 0 / 12px 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 100% 0 / 1px 12px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 0 100% / 12px 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 0 100% / 1px 12px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 100% 100% / 12px 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 100% 100% / 1px 12px no-repeat;
   pointer-events: none;
   z-index: 2;
+  opacity: 0.6;
 }
 
 .scene-view canvas {
@@ -42,80 +43,134 @@
   z-index: 0;
 }
 
-/* ── Floating HUD chip — bottom centre ──────────────────── */
-.scene-hud {
-  position: absolute;
-  bottom: 38px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 0;
-  background: rgba(251, 247, 239, 0.86);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  border: 1px solid var(--rule);
-  box-shadow: var(--shadow-2);
-  border-radius: 999px;
-  padding: 6px 6px 6px 18px;
-  z-index: 3;
-  pointer-events: none;
-}
-.scene-hud .hud-label {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  padding-right: 14px;
-  border-right: 1px solid var(--rule);
-}
-.scene-hud .hud-kbd {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  font-family: var(--font);
-  font-size: 11px;
-  color: var(--ink-2);
-}
-.scene-hud .hud-kbd:last-child { padding-right: 14px; }
-.scene-hud kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 7px;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink);
-  box-shadow: 0 1px 0 var(--rule);
-}
-
-/* ── Top-right scene label ──────────────────────────────── */
+/* ── Top-left stamp ─────────────────────────────────────── */
 .scene-stamp {
   position: absolute;
-  top: 38px;
-  right: 38px;
+  top: 28px;
+  left: 28px;
   z-index: 3;
-  text-align: right;
   pointer-events: none;
 }
 .scene-stamp .stamp-num {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink-4);
-  letter-spacing: 0.1em;
+  font-size: 9px;
+  color: var(--ink-3);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .scene-stamp .stamp-title {
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 400;
-  font-size: 22px;
+  font-size: 20px;
   color: var(--ink);
   letter-spacing: -0.02em;
   margin-top: 2px;
+}
+.scene-stamp .stamp-rule {
+  width: 28px;
+  height: 1px;
+  background: var(--accent);
+  margin-top: 8px;
+}
+
+/* ── Top-right axis ticker ─────────────────────────────── */
+.scene-axes {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  z-index: 3;
+  text-align: right;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+.scene-axes .ax-row { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.scene-axes .ax-row + .ax-row { margin-top: 2px; }
+.scene-axes .swatch {
+  width: 8px; height: 8px;
+  border-radius: 1px;
+}
+
+/* ── Floating HUD chip ──────────────────────────────────── */
+.scene-hud {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(244, 247, 249, 0.82);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+  border-radius: 999px;
+  padding: 4px 4px 4px 14px;
+  z-index: 3;
+  pointer-events: none;
+}
+.scene-hud .hud-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  padding-right: 12px;
+  border-right: 1px solid var(--rule);
+}
+.scene-hud .hud-kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-family: var(--font);
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+.scene-hud .hud-kbd:last-child { padding-right: 12px; }
+.scene-hud kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink);
+  box-shadow: 0 1px 0 var(--rule);
+}
+
+/* ── Bottom-right scale bar ─────────────────────────────── */
+.scene-scale {
+  position: absolute;
+  bottom: 28px;
+  right: 28px;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.scene-scale .scale-bar {
+  display: flex;
+  height: 6px;
+  border: 1px solid var(--ink);
+  width: 80px;
+}
+.scene-scale .scale-bar > div { flex: 1; }
+.scene-scale .scale-bar > div:nth-child(odd) { background: var(--ink); }
+.scene-scale .scale-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  text-transform: uppercase;
 }
