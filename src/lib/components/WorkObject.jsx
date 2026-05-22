@@ -3,7 +3,7 @@ import { PivotControls, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { useRobotStore } from '../state/context'
 
-const BOX_SIZE = [0.15, 0.15, 0.15]
+const BOX_SIZE = [0.22, 0.22, 0.22]
 export const BOX_HALF = BOX_SIZE[0] / 2
 
 /**

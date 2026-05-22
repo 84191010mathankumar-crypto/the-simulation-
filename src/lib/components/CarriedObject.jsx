@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { useRobotStore } from '../state/context'
 import { easeInOutCubic } from '../ik/ikSolver'
 
-const BOX_SIZE = [0.15, 0.15, 0.15]
+const BOX_SIZE = [0.22, 0.22, 0.22]
 
 /**
  * Solid cube that visualises the payload during a Run sequence.
