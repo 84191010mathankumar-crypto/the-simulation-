@@ -5,11 +5,10 @@ import './ControlPanel.css'
 const rad2deg = (r) => (r * 180) / Math.PI
 const fmtDeg  = (r) => rad2deg(r).toFixed(0)
 
-// ─── Joints (compact two-col, 6 axes) ───────────────────────────────
 function Joints({ angles }) {
   return (
     <div className="joints">
-      {JOINT_NAMES.map((n) => {
+      {JOINT_NAMES.map((n, i) => {
         const v   = angles[n] ?? 0
         const lim = JOINT_LIMITS[n]
         const pct  = ((v - lim.lower) / (lim.upper - lim.lower)) * 100
@@ -17,7 +16,7 @@ function Joints({ angles }) {
         const near = v < lim.lower + 0.05 || v > lim.upper - 0.05
         return (
           <div className="j-row" key={n}>
-            <span className="j-name">{n.replace('joint_', 'A')}</span>
+            <span className="j-name">A{i + 1}</span>
             <div className="j-track">
               <div className="j-fill" style={{ width: `${pct}%` }} />
               <div className="j-zero" style={{ left: `${zPct}%` }} />
@@ -30,7 +29,6 @@ function Joints({ angles }) {
   )
 }
 
-// ─── Log entry ──────────────────────────────────────────────────────
 const LEVEL_COLOR = {
   info:  'var(--ink-4)',
   ok:    'var(--green)',
@@ -54,7 +52,6 @@ function LogEntry({ entry }) {
   )
 }
 
-// ─── Main panel ─────────────────────────────────────────────────────
 export default function ControlPanel() {
   const {
     jointAngles, robotLoaded, animState, animProgress,
@@ -89,96 +86,117 @@ export default function ControlPanel() {
     }
   }
 
-  const stateLabel = animState === 'idle' ? 'Idle' : animState.replace(/_/g, ' ')
+  const stateLabel = animState === 'idle' ? 'idle' : animState.replace(/_/g, ' ')
 
   return (
     <aside className="control-panel">
-      {/* Sticky head */}
-      <div className="panel-head">
-        <div className="brand">
-          <div className="brand-top">
-            <span className="brand-title">KUKA KR210</span>
-            <span className={`status ${robotLoaded ? '' : 'off'}`}>
-              <span className="status-dot" />
-              {robotLoaded ? 'ready' : 'loading'}
-            </span>
-          </div>
-          <span className="brand-subtitle">R2700-2 · dev panel</span>
+      {/* ── Masthead ────────────────────────────────────────── */}
+      <div className="masthead">
+        <div className="mast-top">
+          <span className="brand-mark">◐ Roboclaw</span>
+          <span className={`status ${robotLoaded ? '' : 'off'}`}>
+            <span className="status-dot" />
+            {robotLoaded ? 'online' : 'booting'}
+          </span>
         </div>
-
-        <div className="run-row">
-          <button
-            className={`btn-run ${isRunning ? 'running' : ''} ${canRun || isRunning ? '' : 'disabled'}`}
-            onClick={handleRun}
-            disabled={!canRun}
-          >
-            {isRunning ? 'Running…' : 'Run'}
-          </button>
-          <button className="btn-home" onClick={handleHome} disabled={isRunning}>
-            Home
-          </button>
-        </div>
-
-        <div className="follow-row">
-          <button
-            className={`btn-follow ${followTarget === 'start' ? 'active' : ''}`}
-            onClick={() => toggleFollow('start')}
-            disabled={isRunning}
-          >
-            <span className="follow-dot" style={{ background: 'var(--accent)' }} />
-            Follow start
-          </button>
-          <button
-            className={`btn-follow ${followTarget === 'end' ? 'active' : ''}`}
-            onClick={() => toggleFollow('end')}
-            disabled={isRunning}
-          >
-            <span className="follow-dot" style={{ background: 'var(--blue)' }} />
-            Follow end
-          </button>
-        </div>
-
-        <label className="toggle-row" aria-disabled={isRunning}>
-          <input
-            type="checkbox"
-            checked={mobileMode}
-            disabled={isRunning}
-            onChange={(e) => {
-              setMobileMode(e.target.checked)
-              addLog('info', e.target.checked ? 'Mobile platform enabled' : 'Mobile platform disabled')
-            }}
-          />
-          <span className="toggle-switch" />
-          <span className="toggle-label">Mobile platform</span>
-        </label>
-
-        <div className="prog">
-          <span className="prog-state">{stateLabel}</span>
-          <div className="prog-track">
-            <div className="prog-fill" style={{ width: `${animProgress * 100}%` }} />
-          </div>
-          <span className="prog-pct">{Math.round(animProgress * 100)}%</span>
+        <h1 className="display-title">
+          KR <em>210</em>
+        </h1>
+        <div className="mast-meta">
+          <span>R2700-2</span>
+          <span className="dot-sep">·</span>
+          <span>6 axes</span>
+          <span className="dot-sep">·</span>
+          <span>2700 mm reach</span>
         </div>
       </div>
 
+      {/* ── Action bar ─────────────────────────────────────── */}
+      <div className="action-bar">
+        <button
+          className={`btn-run ${isRunning ? 'running' : ''}`}
+          onClick={handleRun}
+          disabled={!canRun}
+        >
+          <span className="btn-run-label">{isRunning ? 'Running' : 'Run sequence'}</span>
+          <span className="btn-run-arrow">→</span>
+        </button>
+        <button className="btn-home" onClick={handleHome} disabled={isRunning} title="Return home">
+          ⤺
+        </button>
+      </div>
+
+      <div className="follow-bar">
+        <button
+          className={`btn-follow ${followTarget === 'start' ? 'active' : ''}`}
+          onClick={() => toggleFollow('start')}
+          disabled={isRunning}
+        >
+          <span className="follow-dot" style={{ background: 'var(--accent)' }} />
+          <span>start</span>
+        </button>
+        <button
+          className={`btn-follow ${followTarget === 'end' ? 'active' : ''}`}
+          onClick={() => toggleFollow('end')}
+          disabled={isRunning}
+        >
+          <span className="follow-dot" style={{ background: 'var(--blue)' }} />
+          <span>end</span>
+        </button>
+      </div>
+
+      <label className="toggle-row" aria-disabled={isRunning}>
+        <input
+          type="checkbox"
+          checked={mobileMode}
+          disabled={isRunning}
+          onChange={(e) => {
+            setMobileMode(e.target.checked)
+            addLog('info', e.target.checked ? 'Mobile platform enabled' : 'Mobile platform disabled')
+          }}
+        />
+        <span className="toggle-switch" />
+        <span className="toggle-label">Mobile platform</span>
+        <span className="toggle-hint">AGV mode</span>
+      </label>
+
+      {/* ── Progress strip ─────────────────────────────────── */}
+      <div className="prog">
+        <div className="prog-line">
+          <span className="prog-state">{stateLabel}</span>
+          <span className="prog-pct">{Math.round(animProgress * 100).toString().padStart(2, '0')}<small>%</small></span>
+        </div>
+        <div className="prog-track">
+          <div className="prog-fill" style={{ width: `${animProgress * 100}%` }} />
+        </div>
+      </div>
+
+      {/* ── Scrollable body ────────────────────────────────── */}
       <div className="panel-scroll">
-        {/* Joints */}
         <section className="section">
-          <div className="section-head">Joints</div>
+          <div className="section-head">
+            <span className="sec-num">01</span>
+            <span className="sec-title">Joints</span>
+          </div>
           <Joints angles={jointAngles} />
         </section>
 
-        {/* Log */}
         <section className="section">
           <div className="section-head">
-            Log
-            <button className="btn-clear" onClick={clearLogs}>Clear</button>
+            <span className="sec-num">02</span>
+            <span className="sec-title">Event Log</span>
+            <button className="btn-clear" onClick={clearLogs}>clear</button>
           </div>
           <div className="log-list">
-            {logs.length === 0 && <div className="log-empty">No events yet.</div>}
+            {logs.length === 0 && <div className="log-empty">waiting for events…</div>}
             {logs.map((e) => <LogEntry key={e.id} entry={e} />)}
           </div>
         </section>
+      </div>
+
+      <div className="colophon">
+        <span>v0.1 · KR210 reference</span>
+        <span className="kbd">⌘</span>
       </div>
     </aside>
   )

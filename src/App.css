@@ -3,5 +3,5 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--paper);
 }

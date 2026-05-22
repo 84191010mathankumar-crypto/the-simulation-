@@ -121,6 +121,11 @@ const ROBOT_COLORS = ['#ff6000','#3b82f6','#10b981','#a855f7','#f43f5e','#eab308
 
 export default function WarehouseScene({ robots, boxes, scheduler, roomSize, registerMeshRef }) {
   return (
+    <div className="scene-wrap">
+      <div className="scene-stamp">
+        <div className="stamp-num">Fig. 02 — Floor plan</div>
+        <div className="stamp-title">{robots.length} {robots.length === 1 ? 'unit' : 'units'} dispatched</div>
+      </div>
     <Canvas
       camera={{ position: [roomSize * 0.55, roomSize * 0.55, roomSize * 0.55], fov: 42, near: 0.1, far: 200 }}
       shadows
@@ -145,17 +150,17 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
       {/* Floor */}
       <mesh receiveShadow rotation={[-Math.PI/2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[roomSize, roomSize]} />
-        <meshStandardMaterial color="#dde2eb" roughness={0.85} metalness={0.05} />
+        <meshStandardMaterial color="#ece4d4" roughness={0.9} metalness={0.02} />
       </mesh>
 
       <Grid
         args={[roomSize, roomSize]}
         cellSize={1}
         cellThickness={0.5}
-        cellColor="#b8c0cc"
+        cellColor="#c7bda8"
         sectionSize={5}
         sectionThickness={1.2}
-        sectionColor="#7a8390"
+        sectionColor="#8a7e66"
         fadeDistance={roomSize * 1.5}
         fadeStrength={1.2}
         followCamera={false}
@@ -170,7 +175,7 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         [0, -roomSize/2, [roomSize, 0.6, 0.1]]].map(([x, z, size], i) => (
         <mesh key={i} position={[x, 0.3, z]}>
           <boxGeometry args={size} />
-          <meshStandardMaterial color="#cbd1dc" />
+          <meshStandardMaterial color="#d8cfba" />
         </mesh>
       ))}
 
@@ -198,5 +203,6 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         dampingFactor={0.08}
       />
     </Canvas>
+    </div>
   )
 }

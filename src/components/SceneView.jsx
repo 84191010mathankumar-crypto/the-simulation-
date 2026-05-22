@@ -135,6 +135,16 @@ export default function SceneView() {
 
   return (
     <div className="scene-view">
+      <div className="scene-stamp">
+        <div className="stamp-num">Fig. 01 — Workcell</div>
+        <div className="stamp-title">Pick &amp; place</div>
+      </div>
+      <div className="scene-hud">
+        <span className="hud-label">Viewport</span>
+        <span className="hud-kbd"><kbd>drag</kbd> orbit</span>
+        <span className="hud-kbd"><kbd>scroll</kbd> zoom</span>
+        <span className="hud-kbd"><kbd>shift</kbd> pan</span>
+      </div>
       <Canvas
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
         shadows
@@ -163,10 +173,10 @@ export default function SceneView() {
           args={[18, 18]}
           cellSize={0.5}
           cellThickness={0.5}
-          cellColor="#cfd5e0"
+          cellColor="#d6cdb8"
           sectionSize={2}
           sectionThickness={1.0}
-          sectionColor="#a8b0c0"
+          sectionColor="#a0937a"
           fadeDistance={14}
           fadeStrength={1.4}
           followCamera={false}
