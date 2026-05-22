@@ -11,23 +11,38 @@
  *   3. flips animState to 'moving_to_start' (triggers the existing
  *      AnimationController to execute the exact same arm motion as the
  *      main demo),
- *   4. watches the per-robot animState to drive box parenting:
- *        - on 'grabbing'   → parent box mesh under the robot's gripper
- *        - on 'releasing'  → unparent + snap box to its target.
+ *   4. each frame, drives the box mesh's transform based on the robot's
+ *      animState — the same scheme the main demo's <CarriedObject> uses:
+ *        moving_to_start / grabbing → sit at the pickup pose
+ *        moving_to_end              → position from gripper pinch frame,
+ *                                     rotation slerped startQuat → endQuat
+ *                                     using easeInOutCubic(animProgress)
+ *        releasing / returning      → sit at the drop pose
+ *
+ *      Using slerped rotation (instead of rigidly parenting under the wrist)
+ *      avoids the one-frame snap at release that comes from CCD-IK leaving
+ *      spin about the tool axis (joint_6) unconstrained.
  *
  * The lib's AnimationController owns the *kinematics*; this file owns the
  * *who does what, and when*.  Nothing here touches IK or joint angles.
  */
 import * as THREE from 'three'
-
-const TMP_V = new THREE.Vector3()
-const TMP_Q = new THREE.Quaternion()
-const TMP_S = new THREE.Vector3()
+import { easeInOutCubic } from 'roboclaw'
 
 function dist2(a, b) {
   const dx = a[0] - b[0]
   const dz = a[2] - b[2]
   return dx * dx + dz * dz
+}
+
+const _toolPos  = new THREE.Vector3()
+const _toolQuat = new THREE.Quaternion()
+const _outPos   = new THREE.Vector3()
+const _outQuat  = new THREE.Quaternion()
+const _tmpV     = new THREE.Vector3()
+
+function getToolLink(robot) {
+  return robot?.links?.tool0 || robot?.links?.flange || robot?.links?.link_6 || null
 }
 
 /**
@@ -55,14 +70,17 @@ export function createScheduler({ robots, boxes, onLog }) {
     state: 'pending',                 // 'pending' | 'assigned' | 'done'
     assignedTo: null,
     // currentWorld is updated as the box is moved.  Initialised to `from`.
-    currentWorld: [...b.from],
+    currentWorld:  [...b.from],
+    startRotation: [...(b.fromRotation || [0, 0, 0])],
+    endRotation:   [...(b.toRotation   || [0, 0, 0])],
+    priority:      b.priority ?? 0,
+    // Filled in on entry to moving_to_end (see driveCarriedMesh below).
+    carry: null, // { localPos: Vector3, startQuat: Quaternion, endQuat: Quaternion }
   }))
 
-  // per-robot bookkeeping — which task they're currently doing, and a
-  // ref to the box mesh we've parented under their gripper.
+  // per-robot bookkeeping — which task they're currently doing.
   const robotBusy = new Map()      // robotId -> task
   const robotPrevState = new Map() // robotId -> previous animState string
-  const carriedMesh = new Map()    // robotId -> THREE.Mesh (or null)
 
   let running = false
 
@@ -78,21 +96,20 @@ export function createScheduler({ robots, boxes, onLog }) {
     for (const t of tasks) {
       t.state = 'pending'
       t.assignedTo = null
-      t.currentWorld = [...t.box.from]
+      t.currentWorld  = [...t.box.from]
+      t.startRotation = [...(t.box.fromRotation || [0, 0, 0])]
+      t.endRotation   = [...(t.box.toRotation   || [0, 0, 0])]
+      t.carry = null
       const mesh = t.box.meshRef?.current
       if (mesh) {
-        // Detach if parented, then put back at `from`.
-        if (mesh.parent && mesh.parent !== mesh.userData.originalParent) {
-          mesh.parent.remove(mesh)
-          mesh.userData.originalParent?.add(mesh)
-        }
         mesh.position.set(t.box.from[0], t.box.from[1], t.box.from[2])
-        mesh.rotation.set(0, 0, 0)
+        const r = t.startRotation
+        mesh.rotation.set(r[0], r[1], r[2])
         mesh.updateMatrixWorld(true)
       }
     }
     robotBusy.clear()
-    carriedMesh.clear()
+    robotPrevState.clear()
     for (const r of robots) {
       r.store.getState().resetToHome()
       r.store.setState({ animState: 'idle', animProgress: 0 })
@@ -120,10 +137,22 @@ export function createScheduler({ robots, boxes, onLog }) {
   }
 
   function pickTask(robot) {
+    // Only consider the lowest-priority tier that still has pending tasks.
+    // This enforces build dependencies (walls before roof, roof before chimney)
+    // without forcing strictly serial execution within a tier.
+    let minPriority = Infinity
+    for (const t of tasks) {
+      if (t.state === 'pending' && t.priority < minPriority) minPriority = t.priority
+    }
+    if (minPriority === Infinity) return null
+
+    // Within the active tier, the robot still grabs whichever pending box is
+    // nearest its current platform position.
     const platPos = robot.store.getState().platformPose.position
     let best = null, bestD = Infinity
     for (const t of tasks) {
       if (t.state !== 'pending') continue
+      if (t.priority !== minPriority) continue
       const d = dist2(platPos, t.currentWorld)
       if (d < bestD) { bestD = d; best = t }
     }
@@ -133,18 +162,19 @@ export function createScheduler({ robots, boxes, onLog }) {
   function assign(robot, task) {
     task.state = 'assigned'
     task.assignedTo = robot.id
+    task.carry = null
     robotBusy.set(robot.id, task)
     const box = task.box
 
     robot.store.setState({
       startObject: {
         position: [...task.currentWorld],
-        rotation: [0, 0, 0],
+        rotation: [...task.startRotation],
         grabVector: box.grab || [0, 1, 0],
       },
       endObject: {
         position: [...box.to],
-        rotation: [0, 0, 0],
+        rotation: [...task.endRotation],
         grabVector: box.grab || [0, 1, 0],
       },
       animState: 'moving_to_start',
@@ -152,75 +182,105 @@ export function createScheduler({ robots, boxes, onLog }) {
     log('info', `Robot ${robot.id} → box ${box.id}`)
   }
 
-  /* Called each frame from a React useFrame to observe per-robot animState
-   * transitions and drive box parenting accordingly. */
+  /* Per-frame transform update for the carried box — mirrors the
+   * <CarriedObject> logic from the main demo. */
+  function driveCarriedMesh(robot, task, state, prev) {
+    const mesh = task.box.meshRef?.current
+    if (!mesh) return
+    const st = state.animState
+
+    if (st === 'moving_to_start' || st === 'grabbing') {
+      const [x, y, z] = task.currentWorld
+      mesh.position.set(x, y, z)
+      mesh.rotation.set(task.startRotation[0], task.startRotation[1], task.startRotation[2])
+      return
+    }
+
+    if (st === 'moving_to_end') {
+      const tool = getToolLink(state.robotRef)
+      if (!tool) return
+
+      // On entry: cache the cube-centre offset in tool-local space, and
+      // both endpoint orientations as quaternions.
+      if (prev !== 'moving_to_end' || !task.carry) {
+        tool.updateWorldMatrix(true, false)
+        tool.getWorldPosition(_toolPos)
+        tool.getWorldQuaternion(_toolQuat)
+
+        const cubeWorld = new THREE.Vector3(...task.currentWorld)
+        const invTool   = _toolQuat.clone().invert()
+        const localPos  = cubeWorld.clone().sub(_toolPos).applyQuaternion(invTool)
+
+        const startQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(task.startRotation[0], task.startRotation[1], task.startRotation[2], 'XYZ')
+        )
+        const endQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(task.endRotation[0], task.endRotation[1], task.endRotation[2], 'XYZ')
+        )
+        task.carry = { localPos, startQuat, endQuat }
+      }
+
+      tool.updateWorldMatrix(true, false)
+      tool.getWorldPosition(_toolPos)
+      tool.getWorldQuaternion(_toolQuat)
+
+      _outPos.copy(task.carry.localPos).applyQuaternion(_toolQuat).add(_toolPos)
+
+      // animProgress is stale on the entry frame (still 1 from the previous
+      // segment).  Force t=0 there to avoid a one-frame flip to end orientation.
+      const rawT = prev !== 'moving_to_end' ? 0 : Math.max(0, Math.min(1, state.animProgress || 0))
+      const t    = easeInOutCubic(rawT)
+      _outQuat.copy(task.carry.startQuat).slerp(task.carry.endQuat, t)
+
+      mesh.position.copy(_outPos)
+      mesh.quaternion.copy(_outQuat)
+      return
+    }
+
+    // releasing | returning → park at end pose
+    const [tx, ty, tz] = task.box.to
+    mesh.position.set(tx, ty, tz)
+    mesh.rotation.set(task.endRotation[0], task.endRotation[1], task.endRotation[2])
+  }
+
+  /* Called each frame from a React useFrame to drive the per-robot box
+   * transforms and observe state transitions. */
   function tick() {
     if (!running) return
-    let anyChanged = false
 
     for (const r of robots) {
-      const st = r.store.getState().animState
-      const prev = robotPrevState.get(r.id)
-      if (st === prev) continue
-      robotPrevState.set(r.id, st)
-      anyChanged = true
+      const state = r.store.getState()
+      const st    = state.animState
+      const prev  = robotPrevState.get(r.id) ?? 'idle'
 
       const task = robotBusy.get(r.id)
-      if (!task) continue
-      const box = task.box
-      const mesh = box.meshRef?.current
-      if (!mesh) continue
+      if (task) driveCarriedMesh(r, task, state, prev)
 
-      if (st === 'grabbing') {
-        // Parent the box under the gripper's tool0 link, preserving its
-        // current world transform.
-        const robotObj = r.store.getState().robotRef
-        const tip = robotObj?.links?.tool0 || robotObj?.links?.flange || robotObj?.links?.link_6
-        if (tip) {
-          if (!mesh.userData.originalParent) mesh.userData.originalParent = mesh.parent
-          mesh.updateMatrixWorld(true)
-          tip.updateMatrixWorld(true)
-          // worldMatrix(mesh) → local under tip
-          const local = tip.matrixWorld.clone().invert().multiply(mesh.matrixWorld)
-          local.decompose(TMP_V, TMP_Q, TMP_S)
-          mesh.parent?.remove(mesh)
-          mesh.position.copy(TMP_V)
-          mesh.quaternion.copy(TMP_Q)
-          mesh.scale.copy(TMP_S)
-          tip.add(mesh)
-          carriedMesh.set(r.id, mesh)
-        }
-      }
+      if (st !== prev) {
+        robotPrevState.set(r.id, st)
 
-      if (st === 'releasing') {
-        // Reparent to the original parent and snap to the `to` location.
-        const carried = carriedMesh.get(r.id)
-        if (carried) {
-          carried.parent?.remove(carried)
-          ;(carried.userData.originalParent || mesh.userData.originalParent)?.add(carried)
-          carried.position.set(box.to[0], box.to[1], box.to[2])
-          carried.rotation.set(0, 0, 0)
-          carried.updateMatrixWorld(true)
-          carriedMesh.delete(r.id)
+        if (task) {
+          if (st === 'releasing') {
+            // The carry is complete — update the task's current world pose
+            // so future re-assignments (e.g. re-stacking) start from here.
+            task.currentWorld  = [...task.box.to]
+            task.startRotation = [...task.endRotation]
+            task.carry = null
+          }
+          if (st === 'idle') {
+            if (task.state === 'assigned') {
+              task.state = 'done'
+              log('ok', `Robot ${r.id} done with box ${task.box.id}`)
+            }
+            robotBusy.delete(r.id)
+          }
         }
-        task.currentWorld = [...box.to]
-      }
-
-      if (st === 'idle') {
-        // Task complete (or aborted).  Free the robot and pump for the next.
-        if (task.state === 'assigned') {
-          task.state = 'done'
-          log('ok', `Robot ${r.id} done with box ${box.id}`)
-        }
-        robotBusy.delete(r.id)
       }
     }
 
     // Always re-pump so newly-loaded robots get work without us having to
     // wait for one of the active robots to finish a segment.
     if (running) pump()
-
-    return anyChanged
   }
 
   return {

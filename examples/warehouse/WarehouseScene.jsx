@@ -81,7 +81,8 @@ function Box({ box, registerMeshRef }) {
     registerMeshRef(box.id, ref.current)
     if (ref.current) {
       ref.current.position.set(box.from[0], box.from[1], box.from[2])
-      ref.current.rotation.set(0, 0, 0)
+      const r = box.fromRotation || [0, 0, 0]
+      ref.current.rotation.set(r[0], r[1], r[2])
     }
     return () => registerMeshRef(box.id, null)
   }, [box.id, registerMeshRef])
@@ -95,8 +96,9 @@ function Box({ box, registerMeshRef }) {
 
 /* Translucent target marker — where the box should end up. */
 function TargetMarker({ box }) {
+  const rot = box.toRotation || [0, 0, 0]
   return (
-    <mesh position={box.to}>
+    <mesh position={box.to} rotation={rot}>
       <boxGeometry args={box.size} />
       <meshStandardMaterial
         color="#4a6ea3"
