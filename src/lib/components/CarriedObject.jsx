@@ -98,8 +98,12 @@ export default function CarriedObject({ color = '#e0a050' }) {
       // Position: follow the gripper (cube centre = tool0 + tool-local offset)
       _outPos.copy(localPosRef.current).applyQuaternion(_toolQuat).add(_toolPos)
 
-      // Orientation: slerp from start to end using the same easing the joints use
-      const t = easeInOutCubic(Math.max(0, Math.min(1, animProgress)))
+      // Orientation: slerp from start to end using the same easing the joints use.
+      // On the entry frame, AnimationController hasn't run yet to reset
+      // animProgress (it's still 1 from the previous segment), so force t=0
+      // to avoid a one-frame flip to the end orientation.
+      const rawProgress = prev !== 'moving_to_end' ? 0 : Math.max(0, Math.min(1, animProgress))
+      const t = easeInOutCubic(rawProgress)
       _outQuat.copy(startQuatRef.current).slerp(endQuatRef.current, t)
 
       mesh.position.copy(_outPos)
