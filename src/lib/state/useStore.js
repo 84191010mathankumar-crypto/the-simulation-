@@ -72,12 +72,12 @@ export function createRobotStore() {
 
     // ── Work objects (the "pick" and "place" boxes) ────────────────────────
     startObject: {
-      position: [1.0, 1.2, 0.9],
+      position: [-1.0, 1.2, 0.9],
       rotation: [0, 0, 0],
       grabVector: [0, 1, 0],
     },
     endObject: {
-      position: [1.2, 0.3, -0.8],
+      position: [1.2, 0.3, 3.0],
       rotation: [0, 0, 0],
       grabVector: [0, 1, 0],
     },
