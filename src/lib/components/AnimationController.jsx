@@ -128,6 +128,12 @@ export default function AnimationController() {
     if (prevStateRef.current !== animState) {
       prevStateRef.current = animState
       progressRef.current  = 0
+      // Also publish the reset to the store so other useFrame consumers
+      // (e.g. CarriedObject, the warehouse scheduler) don't read the stale
+      // animProgress=1 left over from the previous segment on the *next*
+      // frame.  Without this, they slerp to the end of their interpolation
+      // for one frame.
+      useStore.setState({ animProgress: 0 })
 
       const currentAngles   = readAnglesFromRobot(robotRef) || { ...HOME_ANGLES }
       const currentPlatform = { ...store.platformPose }
