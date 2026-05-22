@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid } from '@react-three/drei'
+import { OrbitControls, Grid, Edges, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   RobotArm, AnimationController, RobotStoreProvider,
@@ -89,7 +89,8 @@ function Box({ box, registerMeshRef }) {
   return (
     <mesh ref={ref} castShadow receiveShadow>
       <boxGeometry args={box.size} />
-      <meshStandardMaterial color="#c15f3c" metalness={0.1} roughness={0.7} />
+      <meshStandardMaterial color="#ebe4d2" metalness={0.04} roughness={0.78} />
+      <Edges color="#1a1f27" threshold={12} lineWidth={1.2} />
     </mesh>
   )
 }
@@ -101,11 +102,12 @@ function TargetMarker({ box }) {
     <mesh position={box.to} rotation={rot}>
       <boxGeometry args={box.size} />
       <meshStandardMaterial
-        color="#4a6ea3"
+        color="#9da9b3"
         transparent
-        opacity={0.18}
+        opacity={0.10}
         depthWrite={false}
       />
+      <Edges color="#6b7783" threshold={12} lineWidth={0.9} />
     </mesh>
   )
 }
@@ -155,22 +157,33 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
       {/* Floor */}
       <mesh receiveShadow rotation={[-Math.PI/2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[roomSize, roomSize]} />
-        <meshStandardMaterial color="#dde2e6" roughness={0.9} metalness={0.02} />
+        <meshStandardMaterial color="#e3e8ec" roughness={0.92} metalness={0.0} />
       </mesh>
 
       <Grid
         args={[roomSize, roomSize]}
         cellSize={1}
-        cellThickness={0.5}
-        cellColor="#b8c1c9"
+        cellThickness={0.4}
+        cellColor="#cdd4da"
         sectionSize={5}
-        sectionThickness={1.2}
-        sectionColor="#6f7c89"
-        fadeDistance={roomSize * 1.5}
-        fadeStrength={1.2}
+        sectionThickness={0.9}
+        sectionColor="#8a96a2"
+        fadeDistance={roomSize * 0.8}
+        fadeStrength={1.6}
+        fadeFrom={0}
         followCamera={false}
         infiniteGrid={false}
         position={[0, 0.001, 0]}
+      />
+
+      <ContactShadows
+        position={[0, 0.002, 0]}
+        opacity={0.42}
+        scale={roomSize}
+        blur={2.4}
+        far={6}
+        resolution={1024}
+        color="#0e1620"
       />
 
       {/* Room walls (thin, low) */}
@@ -180,7 +193,7 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         [0, -roomSize/2, [roomSize, 0.6, 0.1]]].map(([x, z, size], i) => (
         <mesh key={i} position={[x, 0.3, z]}>
           <boxGeometry args={size} />
-          <meshStandardMaterial color="#c5cdd5" />
+          <meshStandardMaterial color="#d0d6dc" roughness={0.9} />
         </mesh>
       ))}
 

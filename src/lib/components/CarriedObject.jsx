@@ -1,5 +1,6 @@
 import React, { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { useRobotStore } from '../state/context'
 import { easeInOutCubic } from '../ik/ikSolver'
@@ -118,7 +119,8 @@ export default function CarriedObject({ color = '#e0a050' }) {
   return (
     <mesh ref={meshRef} castShadow visible={false}>
       <boxGeometry args={BOX_SIZE} />
-      <meshStandardMaterial color={color} metalness={0.2} roughness={0.55} />
+      <meshStandardMaterial color={color} metalness={0.04} roughness={0.78} />
+      <Edges color="#1a1f27" threshold={12} lineWidth={1.2} />
     </mesh>
   )
 }

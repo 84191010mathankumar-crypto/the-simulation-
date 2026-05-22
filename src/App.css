@@ -5,3 +5,10 @@
   overflow: hidden;
   background: var(--paper);
 }
+
+@media (max-width: 760px) {
+  .app-layout {
+    flex-direction: column;
+    height: 100vh;
+  }
+}

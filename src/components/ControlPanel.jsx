@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useStore, JOINT_NAMES, JOINT_LIMITS } from '../lib'
+import Nav from './Nav'
 import './ControlPanel.css'
 
 const rad2deg = (r) => (r * 180) / Math.PI
@@ -87,18 +88,30 @@ export default function ControlPanel() {
   }
 
   const stateLabel = animState === 'idle' ? 'idle' : animState.replace(/_/g, ' ')
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
-    <aside className="control-panel">
+    <aside className={`control-panel ${drawerOpen ? 'drawer-open' : ''}`}>
       {/* ── Masthead ────────────────────────────────────────── */}
       <div className="masthead">
         <div className="mast-top">
           <span className="brand-mark">◐ Roboclaw</span>
-          <span className={`status ${robotLoaded ? '' : 'off'}`}>
-            <span className="status-dot" />
-            {robotLoaded ? 'online' : 'booting'}
-          </span>
+          <div className="mast-right">
+            <span className={`status ${robotLoaded ? '' : 'off'}`}>
+              <span className="status-dot" />
+              {robotLoaded ? 'online' : 'booting'}
+            </span>
+            <button
+              className="drawer-toggle"
+              aria-label={drawerOpen ? 'Close panel' : 'Open panel'}
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((v) => !v)}
+            >
+              <span /><span /><span />
+            </button>
+          </div>
         </div>
+        <Nav />
         <h1 className="display-title">
           KR <em>210</em>
         </h1>

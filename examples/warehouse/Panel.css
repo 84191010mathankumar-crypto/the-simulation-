@@ -51,9 +51,88 @@ button { font-family: inherit; }
 /* ── App layout ───────────────────────────────────────────── */
 .app {
   display: grid;
-  grid-template-columns: 290px 1fr;
+  grid-template-columns: clamp(280px, 22vw, 360px) 1fr;
   height: 100vh;
   background: var(--paper);
+}
+
+/* ── Page nav (two-tab segmented control) ─────────────────── */
+.page-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 10px 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 2px;
+}
+.pn-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--ink-3);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pn-tab svg { flex-shrink: 0; opacity: 0.75; transition: opacity 0.2s ease; }
+.pn-tab:hover:not(.active) { color: var(--ink); }
+.pn-tab:hover:not(.active) svg { opacity: 1; }
+.pn-tab.active {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.pn-tab.active svg { opacity: 1; }
+
+/* Head right side (edition + drawer toggle) */
+.warehouse-panel .head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Mobile drawer toggle */
+.drawer-toggle {
+  display: none;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  transition: border-color 0.18s, background 0.18s;
+}
+.drawer-toggle:hover { border-color: var(--ink); background: var(--paper-deep); }
+.drawer-toggle span {
+  display: block;
+  width: 12px;
+  height: 1.5px;
+  background: var(--ink);
+  border-radius: 1px;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.warehouse-panel.drawer-open .drawer-toggle span:nth-child(1) {
+  transform: translateY(4.5px) rotate(45deg);
+}
+.warehouse-panel.drawer-open .drawer-toggle span:nth-child(2) {
+  opacity: 0;
+}
+.warehouse-panel.drawer-open .drawer-toggle span:nth-child(3) {
+  transform: translateY(-4.5px) rotate(-45deg);
 }
 
 /* ── Panel ────────────────────────────────────────────────── */
@@ -522,4 +601,65 @@ input[type=range]::-moz-range-thumb {
   letter-spacing: -0.02em;
   text-transform: none;
   margin-bottom: 2px;
+}
+
+/* ── Wide screens ────────────────────────────────────────── */
+@media (min-width: 1600px) {
+  .warehouse-panel h1 { font-size: 38px; }
+  .warehouse-panel .head { padding: 20px 22px 16px; }
+  .warehouse-panel .section { padding: 14px 22px 12px; }
+  .robot-control .count { font-size: 40px; }
+  .status-grid .num { font-size: 28px; }
+  .colophon { padding: 9px 22px; }
+}
+
+/* ── Mobile — top drawer ─────────────────────────────────── */
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+  .warehouse-panel {
+    height: auto;
+    max-height: 100vh;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    z-index: 10;
+  }
+  .warehouse-panel .head { padding: 12px 14px 10px; }
+  .warehouse-panel h1 { font-size: 26px; }
+  .warehouse-panel .sub { font-size: 9px; }
+  .drawer-toggle { display: inline-flex; }
+
+  /* Default closed: keep masthead + dispatch row visible (so Start / Reset
+     remain at hand). The drawer reveals the rest. */
+  .warehouse-panel:not(.drawer-open) .section:not(.dispatch),
+  .warehouse-panel:not(.drawer-open) .colophon {
+    display: none;
+  }
+  /* Trim the dispatch section's vertical padding on mobile so it tucks
+     in tight under the masthead. */
+  .warehouse-panel:not(.drawer-open) .dispatch {
+    padding-top: 8px;
+    padding-bottom: 10px;
+  }
+  .warehouse-panel:not(.drawer-open) .dispatch .section-head {
+    display: none;
+  }
+  .warehouse-panel.drawer-open {
+    overflow-y: auto;
+  }
+  .warehouse-panel .log {
+    flex: none;
+  }
+  .log-list {
+    max-height: 240px;
+  }
+  .scene-stamp, .scene-meta {
+    top: 18px;
+    left: 18px;
+  }
+  .scene-meta { left: auto; right: 18px; }
+  .scene-stamp .stamp-title, .scene-meta .num { font-size: 16px; }
 }

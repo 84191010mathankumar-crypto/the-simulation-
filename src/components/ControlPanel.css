@@ -2,9 +2,7 @@
    ControlPanel — cool architectural light theme, compact
    ───────────────────────────────────────────────────────────── */
 .control-panel {
-  width: 280px;
-  min-width: 260px;
-  max-width: 300px;
+  width: clamp(280px, 22vw, 360px);
   height: 100vh;
   background: var(--panel);
   border-right: 1px solid var(--rule);
@@ -14,6 +12,87 @@
   flex-shrink: 0;
   font-size: 12px;
   position: relative;
+}
+
+/* ── Page nav (two-tab segmented control) ─────────────────── */
+.page-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 10px 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 2px;
+  position: relative;
+}
+.pn-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--ink-3);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.pn-tab svg { flex-shrink: 0; opacity: 0.75; transition: opacity 0.2s ease; }
+.pn-tab:hover:not(.active) { color: var(--ink); }
+.pn-tab:hover:not(.active) svg { opacity: 1; }
+.pn-tab.active {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.pn-tab.active svg { opacity: 1; }
+
+/* Mast top: brand mark on the left, status + drawer toggle on the right */
+.mast-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Mobile drawer toggle — hidden on desktop */
+.drawer-toggle {
+  display: none;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  transition: border-color 0.18s, background 0.18s;
+}
+.drawer-toggle:hover { border-color: var(--ink); background: var(--paper-deep); }
+.drawer-toggle span {
+  display: block;
+  width: 12px;
+  height: 1.5px;
+  background: var(--ink);
+  border-radius: 1px;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.control-panel.drawer-open .drawer-toggle span:nth-child(1) {
+  transform: translateY(4.5px) rotate(45deg);
+}
+.control-panel.drawer-open .drawer-toggle span:nth-child(2) {
+  opacity: 0;
+}
+.control-panel.drawer-open .drawer-toggle span:nth-child(3) {
+  transform: translateY(-4.5px) rotate(-45deg);
 }
 
 /* ── Masthead ─────────────────────────────────────────────── */
@@ -468,4 +547,58 @@
   background: var(--surface);
   color: var(--ink-3);
   font-size: 10px;
+}
+
+/* ── Wide screens — display title gets more presence ──────── */
+@media (min-width: 1600px) {
+  .display-title { font-size: 52px; }
+  .masthead { padding: 20px 22px 16px; }
+  .section { padding: 14px 22px 12px; }
+  .action-bar, .follow-bar { padding-left: 22px; padding-right: 22px; }
+  .toggle-row { padding-left: 22px; padding-right: 22px; }
+  .prog { padding-left: 22px; padding-right: 22px; }
+  .colophon { padding-left: 22px; padding-right: 22px; }
+}
+
+/* ── Mobile — sidebar becomes a top drawer ────────────────── */
+@media (max-width: 760px) {
+  .control-panel {
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: 100vh;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    position: relative;
+    z-index: 10;
+  }
+  .masthead { padding: 12px 14px 10px; }
+  .drawer-toggle { display: inline-flex; }
+  .display-title { font-size: 32px; }
+  .mast-meta { display: none; }
+
+  /* Default: masthead + primary action row + progress strip stay visible
+     (so Run / Home and the live state are always at hand). The drawer
+     reveals the rest. */
+  .control-panel:not(.drawer-open) .follow-bar,
+  .control-panel:not(.drawer-open) .toggle-row,
+  .control-panel:not(.drawer-open) .panel-scroll,
+  .control-panel:not(.drawer-open) .colophon {
+    display: none;
+  }
+  .control-panel.drawer-open {
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  .panel-scroll {
+    flex: none;
+    overflow-y: visible;
+  }
+  .section:last-child {
+    flex: none;
+    min-height: 0;
+  }
+  .log-list {
+    max-height: 240px;
+  }
 }

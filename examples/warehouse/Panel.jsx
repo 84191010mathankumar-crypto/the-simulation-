@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState } from 'react'
+import Nav from '../../src/components/Nav'
 
 export default function Panel({
   robotCount, setRobotCount,
@@ -8,14 +9,26 @@ export default function Panel({
   const allLoaded = loadedCount >= robotsTotal
   const total = taskCounts.pending + taskCounts.assigned + taskCounts.done
   const scenario = scenarios.find((s) => s.id === scenarioId) || scenarios[0]
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
-    <aside className="warehouse-panel">
+    <aside className={`warehouse-panel ${drawerOpen ? 'drawer-open' : ''}`}>
       <div className="head">
         <div className="brand-line">
           <span className="brand-mark">◐ Roboclaw</span>
-          <span className="edition">Vol. 02 · Warehouse</span>
+          <div className="head-right">
+            <span className="edition">Vol. 02 · Warehouse</span>
+            <button
+              className="drawer-toggle"
+              aria-label={drawerOpen ? 'Close panel' : 'Open panel'}
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((v) => !v)}
+            >
+              <span /><span /><span />
+            </button>
+          </div>
         </div>
+        <Nav />
         <h1>Multi-<em>fleet</em> floor</h1>
         <div className="sub">{scenario.description} · {total} tasks</div>
       </div>
@@ -66,7 +79,7 @@ export default function Panel({
         </div>
       </section>
 
-      <section className="section">
+      <section className="section dispatch">
         <div className="section-head">
           <span className="sec-num">03</span>
           <span className="sec-title">Dispatch</span>

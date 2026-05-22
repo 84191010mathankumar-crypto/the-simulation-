@@ -5,6 +5,7 @@ import {
   Grid,
   GizmoHelper,
   GizmoViewport,
+  ContactShadows,
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { RobotArm, WorkObject, CarriedObject, AnimationController, useStore } from '../lib'
@@ -178,28 +179,34 @@ export default function SceneView() {
         <Grid
           args={[18, 18]}
           cellSize={0.5}
-          cellThickness={0.5}
-          cellColor="#c2cad1"
+          cellThickness={0.4}
+          cellColor="#cdd4da"
           sectionSize={2}
-          sectionThickness={1.0}
+          sectionThickness={0.9}
           sectionColor="#8a96a2"
-          fadeDistance={14}
-          fadeStrength={1.4}
+          fadeDistance={10}
+          fadeStrength={1.8}
+          fadeFrom={0}
           followCamera={false}
           infiniteGrid
           position={[0, 0.0005, 0]}
         />
 
-        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-          <planeGeometry args={[40, 40]} />
-          <shadowMaterial opacity={0.20} />
-        </mesh>
+        <ContactShadows
+          position={[0, 0.002, 0]}
+          opacity={0.45}
+          scale={10}
+          blur={2.2}
+          far={4}
+          resolution={1024}
+          color="#0e1620"
+        />
 
         <Suspense fallback={null}>
           <RobotBase mobileMode={mobileMode} />
-          <WorkObject objectKey="start" color="#c15f3c" />
-          <WorkObject objectKey="end"   color="#4a6ea3" />
-          <CarriedObject color="#e0a050" />
+          <WorkObject objectKey="start" color="#c79a7a" />
+          <WorkObject objectKey="end"   color="#8aa0b6" />
+          <CarriedObject color="#ebe4d2" />
           <AnimationController />
         </Suspense>
 
