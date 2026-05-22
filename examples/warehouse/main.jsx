@@ -19,7 +19,7 @@ import { createRobotStore } from 'roboclaw'
 
 import WarehouseScene from './WarehouseScene'
 import Panel from './Panel'
-import { SCENARIOS, ROOM_SIZE } from './script'
+import { SCENARIOS, ROOM_SIZE, DEFAULT_CUSTOM_CODE, parseCustomCode } from './script'
 import { createScheduler } from './scheduler'
 
 import './Panel.css'
@@ -45,10 +45,30 @@ function App() {
   const [running, setRunning] = useState(false)
   const [logs, setLogs] = useState([])
   const [loadedCount, setLoadedCount] = useState(0)
+  const [customCode, setCustomCode] = useState(DEFAULT_CUSTOM_CODE)
+
+  // Live-parse the user's script.  On parse failure we keep whatever boxes
+  // last parsed successfully so the scene doesn't blink to empty mid-keystroke.
+  const lastGoodCustomBoxesRef = useRef(null)
+  const customParse = useMemo(() => parseCustomCode(customCode), [customCode])
+  if (customParse.boxes) lastGoodCustomBoxesRef.current = customParse.boxes
+  const customBoxes = lastGoodCustomBoxesRef.current || []
+
+  const customScenario = useMemo(() => ({
+    id: 'custom',
+    name: 'Custom',
+    description: customParse.error
+      ? `Custom · ${customParse.error}`
+      : `Custom · ${customBoxes.length} pieces`,
+    roomSize: ROOM_SIZE,
+    boxes: customBoxes,
+  }), [customBoxes, customParse.error])
+
+  const allScenarios = useMemo(() => [...SCENARIOS, customScenario], [customScenario])
 
   const scenario = useMemo(
-    () => SCENARIOS.find((s) => s.id === scenarioId) || SCENARIOS[0],
-    [scenarioId],
+    () => allScenarios.find((s) => s.id === scenarioId) || allScenarios[0],
+    [scenarioId, allScenarios],
   )
   const scenarioBoxes = scenario.boxes
 
@@ -153,17 +173,30 @@ function App() {
     setScenarioId(id)
     setLogs([])
     setTaskCounts({
-      pending: (SCENARIOS.find((s) => s.id === id) || SCENARIOS[0]).boxes.length,
+      pending: (allScenarios.find((s) => s.id === id) || allScenarios[0]).boxes.length,
       assigned: 0, done: 0,
     })
   }
+
+  // Live custom-script edits change the box list under us — reflect the new
+  // pending count in the ledger so the UI stays honest (only while idle).
+  useEffect(() => {
+    if (running) return
+    if (scenarioId !== 'custom') return
+    setTaskCounts({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
+  }, [scenarioBoxes, running, scenarioId])
+
+  const onCustomCodeChange = useCallback((code) => {
+    if (running) return
+    setCustomCode(code)
+  }, [running])
 
   return (
     <div className="app">
       <Panel
         robotCount={robotCount}
         setRobotCount={setRobotCount}
-        scenarios={SCENARIOS}
+        scenarios={allScenarios}
         scenarioId={scenarioId}
         onScenarioChange={onScenarioChange}
         onStart={onStart}
@@ -173,6 +206,9 @@ function App() {
         logs={logs}
         loadedCount={loadedCount}
         robotsTotal={robots.length}
+        customCode={customCode}
+        onCustomCodeChange={onCustomCodeChange}
+        customError={customParse.error}
       />
       <WarehouseScene
         robots={robots}

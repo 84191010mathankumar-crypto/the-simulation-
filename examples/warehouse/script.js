@@ -30,25 +30,25 @@ function buildHouseScenario() {
 
   const boxes = [
     { id: 'h-wall-N', size: [HOUSE_W, WALL_H, WALL_T],
-      from: [PICK_X, wallY, -4], to: [HOUSE_X, wallY, HOUSE_Z - halfD],
+      from: [PICK_X, wallY, -6], to: [HOUSE_X, wallY, HOUSE_Z - halfD],
       fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
     { id: 'h-wall-S', size: [HOUSE_W, WALL_H, WALL_T],
       from: [PICK_X, wallY, -2], to: [HOUSE_X, wallY, HOUSE_Z + halfD],
       fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
     { id: 'h-wall-E', size: [WALL_T, WALL_H, HOUSE_D],
-      from: [PICK_X, wallY, 0], to: [HOUSE_X + halfW, wallY, HOUSE_Z],
+      from: [PICK_X, wallY, 1], to: [HOUSE_X + halfW, wallY, HOUSE_Z],
       fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
     { id: 'h-wall-W', size: [WALL_T, WALL_H, HOUSE_D],
-      from: [PICK_X, wallY, 2], to: [HOUSE_X - halfW, wallY, HOUSE_Z],
+      from: [PICK_X, wallY, 2.5], to: [HOUSE_X - halfW, wallY, HOUSE_Z],
       fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
     { id: 'h-step', size: [0.8, 0.15, 0.3],
-      from: [PICK_X - 1, 0.075, 5], to: [HOUSE_X, 0.075, HOUSE_Z + halfD + 0.15],
+      from: [PICK_X - 1, 0.075, 4], to: [HOUSE_X, 0.075, HOUSE_Z + halfD + 0.15],
       fromRotation: [0, 0.35, 0], toRotation: [0, 0, 0], grab: TOP, priority: 0 },
     { id: 'h-roof', size: [HOUSE_W + 2 * ROOF_OVERHANG, ROOF_T, HOUSE_D + 2 * ROOF_OVERHANG],
-      from: [PICK_X - 1, ROOF_T / 2, 4], to: [HOUSE_X, WALL_H + ROOF_T / 2, HOUSE_Z],
+      from: [PICK_X - 1, ROOF_T / 2, 7], to: [HOUSE_X, WALL_H + ROOF_T / 2, HOUSE_Z],
       fromRotation: [0, HALF_PI, 0], toRotation: [0, 0, 0], grab: TOP, priority: 1 },
     { id: 'h-chimney', size: [0.3, 0.45, 0.3],
-      from: [PICK_X - 1, 0.225, -5], to: [HOUSE_X + 0.8, WALL_H + ROOF_T + 0.225, HOUSE_Z - 0.8],
+      from: [PICK_X - 1, 0.225, -9], to: [HOUSE_X + 0.8, WALL_H + ROOF_T + 0.225, HOUSE_Z - 0.8],
       fromRotation: [0, Math.PI / 4, 0], toRotation: [0, 0, 0], grab: TOP, priority: 2 },
   ]
 
@@ -139,3 +139,91 @@ export const SCENARIOS = [
 
 // Back-compat with old callers (and the README example).
 export const boxes = SCENARIOS[0].boxes
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Custom scenario starter — shown in the live editor as initial code.
+//
+// User code is evaluated as the body of `new Function(code)` and must `return`
+// an array of boxes.  We pre-fill it with the House example so newcomers have
+// something working to mutate.
+// ═══════════════════════════════════════════════════════════════════════════
+export const DEFAULT_CUSTOM_CODE = `// Write JavaScript that returns an array of boxes.
+// Each box: { id, size:[w,h,d], from:[x,y,z], to:[x,y,z],
+//             fromRotation, toRotation, grab, priority }
+//
+// • from / to are world positions
+// • grab is the box-local normal the gripper approaches from
+// • priority enforces build order (lower runs first)
+//
+// The scene updates as you type. Try changing HOUSE_X or WALL_H.
+
+const TOP = [0, 1, 0]
+const HALF_PI = Math.PI / 2
+
+const HOUSE_X = 6, HOUSE_Z = 0
+const HOUSE_W = 3.0, HOUSE_D = 3.0
+const WALL_H = 1.0, WALL_T = 0.18
+const ROOF_T = 0.12, ROOF_OVERHANG = 0.25
+const PICK_X = -7
+const wallY = WALL_H / 2
+const halfW = HOUSE_W / 2, halfD = HOUSE_D / 2
+
+return [
+  { id: 'wall-N', size: [HOUSE_W, WALL_H, WALL_T],
+    from: [PICK_X, wallY, -6], to: [HOUSE_X, wallY, HOUSE_Z - halfD],
+    fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 0 },
+  { id: 'wall-S', size: [HOUSE_W, WALL_H, WALL_T],
+    from: [PICK_X, wallY, -2], to: [HOUSE_X, wallY, HOUSE_Z + halfD],
+    fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 0 },
+  { id: 'wall-E', size: [WALL_T, WALL_H, HOUSE_D],
+    from: [PICK_X, wallY, 1], to: [HOUSE_X + halfW, wallY, HOUSE_Z],
+    fromRotation: [0,  HALF_PI, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 0 },
+  { id: 'wall-W', size: [WALL_T, WALL_H, HOUSE_D],
+    from: [PICK_X, wallY, 2.5], to: [HOUSE_X - halfW, wallY, HOUSE_Z],
+    fromRotation: [0, -HALF_PI, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 0 },
+  { id: 'step', size: [0.8, 0.15, 0.3],
+    from: [PICK_X - 1, 0.075, 4], to: [HOUSE_X, 0.075, HOUSE_Z + halfD + 0.15],
+    fromRotation: [0, 0.35, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 0 },
+  { id: 'roof', size: [HOUSE_W + 2 * ROOF_OVERHANG, ROOF_T, HOUSE_D + 2 * ROOF_OVERHANG],
+    from: [PICK_X - 1, ROOF_T / 2, 7], to: [HOUSE_X, WALL_H + ROOF_T / 2, HOUSE_Z],
+    fromRotation: [0, HALF_PI, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 1 },
+  { id: 'chimney', size: [0.3, 0.45, 0.3],
+    from: [PICK_X - 1, 0.225, -9],
+    to: [HOUSE_X + 0.8, WALL_H + ROOF_T + 0.225, HOUSE_Z - 0.8],
+    fromRotation: [0, Math.PI / 4, 0], toRotation: [0, 0, 0],
+    grab: TOP, priority: 2 },
+]
+`
+
+// Parse a user-written code string into a boxes array.  Returns
+// { boxes, error } — on parse failure, boxes is null and error is a string.
+export function parseCustomCode(code) {
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(code)
+    const result = fn()
+    if (!Array.isArray(result)) {
+      return { boxes: null, error: 'Code must return an array of boxes' }
+    }
+    const seen = new Set()
+    for (let i = 0; i < result.length; i++) {
+      const b = result[i]
+      if (!b || typeof b !== 'object')   return { boxes: null, error: `Box ${i} is not an object` }
+      if (!b.id || typeof b.id !== 'string') return { boxes: null, error: `Box ${i} is missing string id` }
+      if (seen.has(b.id))                return { boxes: null, error: `Duplicate id "${b.id}"` }
+      seen.add(b.id)
+      if (!Array.isArray(b.size) || b.size.length !== 3) return { boxes: null, error: `Box "${b.id}" needs size:[w,h,d]` }
+      if (!Array.isArray(b.from) || b.from.length !== 3) return { boxes: null, error: `Box "${b.id}" needs from:[x,y,z]` }
+      if (!Array.isArray(b.to)   || b.to.length   !== 3) return { boxes: null, error: `Box "${b.id}" needs to:[x,y,z]` }
+    }
+    return { boxes: result, error: null }
+  } catch (e) {
+    return { boxes: null, error: e.message }
+  }
+}

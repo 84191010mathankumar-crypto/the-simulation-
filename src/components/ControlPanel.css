@@ -369,7 +369,8 @@
 /* ── Scroll body ──────────────────────────────────────────── */
 .panel-scroll {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -382,10 +383,6 @@
 }
 .section:last-child {
   border-bottom: none;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
 .section-head {
@@ -465,9 +462,6 @@
 .log-list {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
 }
 .log-empty {
   font-family: var(--font-display);

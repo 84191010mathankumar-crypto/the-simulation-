@@ -155,7 +155,8 @@ export default function SceneView() {
       <Canvas
         camera={{ position: [4.0, 2.6, 4.0], fov: 42, near: 0.01, far: 100 }}
         shadows
-        gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping }}
+        dpr={[1, 1.5]}
+        gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => { gl.toneMappingExposure = 1.15 }}
       >
         {/* Lighting — neutral cool whites, no warm tint */}
@@ -165,7 +166,7 @@ export default function SceneView() {
           position={[6, 9, 5]}
           intensity={1.4}
           castShadow
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[1024, 1024]}
           shadow-bias={-0.0001}
           shadow-normalBias={0.02}
           shadow-camera-near={0.1}
@@ -179,11 +180,11 @@ export default function SceneView() {
         <Grid
           args={[18, 18]}
           cellSize={0.5}
-          cellThickness={0.4}
-          cellColor="#cdd4da"
+          cellThickness={0.75}
+          cellColor="#a0aab3"
           sectionSize={2}
-          sectionThickness={0.9}
-          sectionColor="#8a96a2"
+          sectionThickness={1.2}
+          sectionColor="#7b8693"
           fadeDistance={10}
           fadeStrength={1.8}
           fadeFrom={0}
@@ -198,7 +199,7 @@ export default function SceneView() {
           scale={10}
           blur={2.2}
           far={4}
-          resolution={1024}
+          resolution={512}
           color="#0e1620"
         />
 

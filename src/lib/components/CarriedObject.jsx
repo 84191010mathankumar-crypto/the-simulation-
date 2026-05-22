@@ -120,7 +120,7 @@ export default function CarriedObject({ color = '#e0a050' }) {
     <mesh ref={meshRef} castShadow visible={false}>
       <boxGeometry args={BOX_SIZE} />
       <meshStandardMaterial color={color} metalness={0.04} roughness={0.78} />
-      <Edges color="#1a1f27" threshold={12} lineWidth={1.2} />
+      <Edges color="#1a1f27" threshold={12} lineWidth={1} />
     </mesh>
   )
 }

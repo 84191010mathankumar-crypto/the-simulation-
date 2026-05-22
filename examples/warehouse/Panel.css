@@ -141,8 +141,10 @@ button { font-family: inherit; }
   border-right: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
+  height: 100vh;
 }
 
 /* Masthead */
@@ -447,18 +449,13 @@ input[type=range]::-moz-range-thumb {
 
 /* Log */
 .log {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   border-bottom: none;
 }
 .log-list {
-  overflow-y: auto;
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 .log-empty {
   font-family: var(--font-display);
@@ -601,6 +598,108 @@ input[type=range]::-moz-range-thumb {
   letter-spacing: -0.02em;
   text-transform: none;
   margin-bottom: 2px;
+}
+
+/* ── Custom-scenario editor ──────────────────────────────── */
+.warehouse-panel .section.editor-section { padding-bottom: 12px; }
+
+.code-editor {
+  position: relative;
+  height: 280px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.code-editor.has-error { border-color: var(--red); }
+
+/* Highlight overlay and textarea share identical layout so glyphs line up. */
+.code-hl,
+.code-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 10px 12px 28px 16px;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  background: transparent;
+}
+
+.code-hl {
+  pointer-events: none;
+  color: var(--ink);
+  z-index: 1;
+}
+.code-input {
+  z-index: 2;
+  color: transparent;
+  caret-color: var(--ink);
+  -webkit-text-fill-color: transparent;
+  outline: none;
+  resize: none;
+}
+.code-input::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.code-input:disabled { cursor: not-allowed; }
+.code-editor:has(.code-input:disabled) { opacity: 0.62; }
+
+/* Thin accent rule down the left edge — a designer's mark. */
+.code-editor::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 22px; left: 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0.9;
+  z-index: 3;
+  pointer-events: none;
+}
+.code-editor.has-error::before { background: var(--red); }
+
+/* Token colors — restrained, two-tone with one accent. */
+.t-cmt     { color: var(--ink-4); font-style: italic; }
+.t-str     { color: var(--accent-deep); }
+.t-kw      { color: var(--ink); font-weight: 600; }
+.t-builtin { color: var(--steel); font-weight: 500; }
+.t-num     { color: var(--amber); }
+.t-op      { color: var(--ink-3); }
+.t-pn      { color: var(--ink-3); }
+
+/* Status strip pinned to the editor's bottom. */
+.code-status {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 22px;
+  padding: 0 12px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-top: 1px solid var(--rule-soft);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  z-index: 4;
+}
+.code-status .dot { font-size: 8px; }
+.code-status.ok  .dot { color: var(--green); }
+.code-status.err .dot { color: var(--red); }
+.code-status.ok  .msg { color: var(--ink-3); }
+.code-status.err .msg {
+  color: var(--red);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Wide screens ────────────────────────────────────────── */

@@ -79,18 +79,24 @@ function Box({ box, registerMeshRef }) {
     // object.  The scheduler does `mesh.userData = ...`, `mesh.updateMatrixWorld()`
     // etc. directly on whatever was registered.
     registerMeshRef(box.id, ref.current)
-    if (ref.current) {
-      ref.current.position.set(box.from[0], box.from[1], box.from[2])
-      const r = box.fromRotation || [0, 0, 0]
-      ref.current.rotation.set(r[0], r[1], r[2])
-    }
     return () => registerMeshRef(box.id, null)
   }, [box.id, registerMeshRef])
+  // Re-apply pickup pose whenever from/fromRotation change (live custom-script
+  // edits mutate these without changing box.id, so the registration effect
+  // above does not re-fire).
+  const [fx, fy, fz] = box.from
+  const fr = box.fromRotation || [0, 0, 0]
+  const [rx, ry, rz] = fr
+  useEffect(() => {
+    if (!ref.current) return
+    ref.current.position.set(fx, fy, fz)
+    ref.current.rotation.set(rx, ry, rz)
+  }, [fx, fy, fz, rx, ry, rz])
   return (
-    <mesh ref={ref} castShadow receiveShadow>
+    <mesh ref={ref} castShadow receiveShadow key={box.size.join(',')}>
       <boxGeometry args={box.size} />
-      <meshStandardMaterial color="#ebe4d2" metalness={0.04} roughness={0.78} />
-      <Edges color="#1a1f27" threshold={12} lineWidth={1.2} />
+      <meshStandardMaterial color="#ffffff" metalness={0.04} roughness={0.78} />
+      <Edges color="#1a1f27" threshold={12} lineWidth={1} />
     </mesh>
   )
 }
@@ -99,15 +105,15 @@ function Box({ box, registerMeshRef }) {
 function TargetMarker({ box }) {
   const rot = box.toRotation || [0, 0, 0]
   return (
-    <mesh position={box.to} rotation={rot}>
+    <mesh position={box.to} rotation={rot} key={box.size.join(',')}>
       <boxGeometry args={box.size} />
       <meshStandardMaterial
-        color="#9da9b3"
+        color="#ffffff"
         transparent
         opacity={0.10}
         depthWrite={false}
       />
-      <Edges color="#6b7783" threshold={12} lineWidth={0.9} />
+      <Edges color="#6b7783" threshold={12} lineWidth={1} />
     </mesh>
   )
 }
@@ -136,7 +142,8 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
     <Canvas
       camera={{ position: [roomSize * 0.55, roomSize * 0.55, roomSize * 0.55], fov: 42, near: 0.1, far: 200 }}
       shadows
-      gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping }}
+      dpr={[1, 1.5]}
+      gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => { gl.toneMappingExposure = 1.15 }}
     >
       <hemisphereLight args={['#f4f6fa', '#d0d5dd', 0.80]} />
@@ -145,7 +152,7 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         position={[roomSize * 0.4, roomSize * 0.7, roomSize * 0.3]}
         intensity={1.3}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-camera-near={0.1}
         shadow-camera-far={roomSize * 3}
         shadow-camera-left={-roomSize}
@@ -163,11 +170,11 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
       <Grid
         args={[roomSize, roomSize]}
         cellSize={1}
-        cellThickness={0.4}
-        cellColor="#cdd4da"
+        cellThickness={0.75}
+        cellColor="#a0aab3"
         sectionSize={5}
-        sectionThickness={0.9}
-        sectionColor="#8a96a2"
+        sectionThickness={1.2}
+        sectionColor="#7b8693"
         fadeDistance={roomSize * 0.8}
         fadeStrength={1.6}
         fadeFrom={0}
@@ -182,7 +189,7 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         scale={roomSize}
         blur={2.4}
         far={6}
-        resolution={1024}
+        resolution={512}
         color="#0e1620"
       />
 

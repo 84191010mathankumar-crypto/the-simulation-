@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import Nav from '../../src/components/Nav'
+import CodeEditor from './CodeEditor'
 
 export default function Panel({
   robotCount, setRobotCount,
   scenarios, scenarioId, onScenarioChange,
   onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal,
+  customCode, onCustomCodeChange, customError,
 }) {
   const allLoaded = loadedCount >= robotsTotal
   const total = taskCounts.pending + taskCounts.assigned + taskCounts.done
@@ -53,6 +55,21 @@ export default function Panel({
           ))}
         </div>
       </section>
+
+      {scenarioId === 'custom' && (
+        <section className="section editor-section">
+          <div className="section-head">
+            <span className="sec-num">01·b</span>
+            <span className="sec-title">Script</span>
+          </div>
+          <CodeEditor
+            value={customCode}
+            onChange={onCustomCodeChange}
+            error={customError}
+            disabled={running}
+          />
+        </section>
+      )}
 
       <section className="section">
         <div className="section-head">

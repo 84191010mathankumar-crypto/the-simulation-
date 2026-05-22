@@ -89,7 +89,7 @@ export default function WorkObject({ objectKey, color }) {
             opacity={0.18}
             depthWrite={false}
           />
-          <Edges color={color} threshold={5} lineWidth={1.8} />
+          <Edges color={color} threshold={5} lineWidth={1} />
         </mesh>
       </PivotControls>
 
