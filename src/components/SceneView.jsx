@@ -5,7 +5,6 @@ import {
   Grid,
   GizmoHelper,
   GizmoViewport,
-  ContactShadows,
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { RobotArm, WorkObject, CarriedObject, AnimationController, useStore } from '../lib'
@@ -165,7 +164,6 @@ export default function SceneView() {
         <directionalLight
           position={[6, 9, 5]}
           intensity={1.4}
-          castShadow
           shadow-mapSize={[1024, 1024]}
           shadow-bias={-0.0001}
           shadow-normalBias={0.02}
@@ -193,14 +191,26 @@ export default function SceneView() {
           position={[0, 0.0005, 0]}
         />
 
-        <ContactShadows
-          position={[0, 0.002, 0]}
-          opacity={0.45}
-          scale={10}
-          blur={2.2}
-          far={4}
-          resolution={512}
-          color="#0e1620"
+        {/* Ground shadow receiver — catches the top-down AO shadow light */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+          <planeGeometry args={[30, 30]} />
+          <shadowMaterial transparent opacity={0.3} />
+        </mesh>
+
+        {/* Overhead shadow-only light — points straight down, large radius → AO blob */}
+        <directionalLight
+          position={[0, 8, 0]}
+          intensity={0.001}
+          castShadow
+          shadow-mapSize={[1048, 1048]}
+          shadow-bias={-0.0003}
+          shadow-radius={15}
+          shadow-camera-near={0.5}
+          shadow-camera-far={12}
+          shadow-camera-left={-3.5}
+          shadow-camera-right={3.5}
+          shadow-camera-top={3.5}
+          shadow-camera-bottom={-3.5}
         />
 
         <Suspense fallback={null}>
