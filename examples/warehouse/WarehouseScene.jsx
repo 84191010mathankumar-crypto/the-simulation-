@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Edges, ContactShadows } from '@react-three/drei'
+import { OrbitControls, Grid, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   RobotArm, AnimationController, RobotStoreProvider,
@@ -151,7 +151,6 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
       <directionalLight
         position={[roomSize * 0.4, roomSize * 0.7, roomSize * 0.3]}
         intensity={1.3}
-        castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-camera-near={0.1}
         shadow-camera-far={roomSize * 3}
@@ -183,14 +182,26 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
         position={[0, 0.001, 0]}
       />
 
-      <ContactShadows
-        position={[0, 0.002, 0]}
-        opacity={0.42}
-        scale={roomSize}
-        blur={2.4}
-        far={6}
-        resolution={512}
-        color="#0e1620"
+      {/* Ground shadow receiver — sits just above the grid, no depth write so it never z-fights */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} receiveShadow>
+        <planeGeometry args={[roomSize, roomSize]} />
+        <shadowMaterial transparent opacity={0.30} depthWrite={false} />
+      </mesh>
+
+      {/* Overhead shadow-only light — points straight down, large radius → soft AO blob */}
+      <directionalLight
+        position={[0, roomSize * 0.8, 0]}
+        intensity={0.001}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0003}
+        shadow-radius={40}
+        shadow-camera-near={0.5}
+        shadow-camera-far={roomSize}
+        shadow-camera-left={-roomSize / 2}
+        shadow-camera-right={roomSize / 2}
+        shadow-camera-top={roomSize / 2}
+        shadow-camera-bottom={-roomSize / 2}
       />
 
       {/* Room walls (thin, low) */}
