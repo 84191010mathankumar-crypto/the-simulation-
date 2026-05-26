@@ -191,10 +191,10 @@ export default function SceneView() {
           position={[0, 0.0005, 0]}
         />
 
-        {/* Ground shadow receiver — catches the top-down AO shadow light */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        {/* Ground shadow receiver — sits just above the grid, no depth write so it never fights it */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
           <planeGeometry args={[30, 30]} />
-          <shadowMaterial transparent opacity={0.3} />
+          <shadowMaterial transparent opacity={0.3} depthWrite={false} />
         </mesh>
 
         {/* Overhead shadow-only light — points straight down, large radius → AO blob */}
