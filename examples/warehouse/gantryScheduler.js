@@ -40,6 +40,10 @@ export function createGantryScheduler({ boxes, onLog }) {
     startRotY:     yawOf(b.fromRotation),
     endRotY:       yawOf(b.toRotation),
     priority:      b.priority ?? 0,
+    // The gantry grabs boxes from the TOP — its gripper tip must land on the
+    // box's top face, not its centre anchor.  Half the box's height is the
+    // offset between the recorded y (box centre) and the grab point.
+    halfH: (b.size && b.size[1] != null) ? b.size[1] / 2 : 0,
   }))
 
   let running = false
@@ -100,13 +104,19 @@ export function createGantryScheduler({ boxes, onLog }) {
   function assign(task) {
     task.state = 'assigned'
     current = task
+    // The gantry's gripper tip is what `startObject.position` / `endObject.position`
+    // drive — the AnimationController descends `pose.y` to `position[1]`.  Since
+    // the gantry grabs from the TOP, that target y is the box's top face, i.e.
+    // the recorded centre y plus half the box height.
+    const [sx, sy, sz] = task.currentWorld
+    const [tx, ty, tz] = task.box.to
     store.setState({
       startObject: {
-        position: [...task.currentWorld],
+        position: [sx, sy + task.halfH, sz],
         rotY: task.startRotY,
       },
       endObject: {
-        position: [...task.box.to],
+        position: [tx, ty + task.halfH, tz],
         rotY: task.endRotY,
       },
       animState: 'moving_to_start',
@@ -140,8 +150,9 @@ export function createGantryScheduler({ boxes, onLog }) {
     const { pose, carrying } = state
 
     if (carrying) {
-      // Gripper has the box — follow the tool tip directly.
-      mesh.position.set(pose.x, pose.y, pose.z)
+      // Gripper has the box by its top face — the box hangs below the
+      // fingertip, so its centre is one half-height down from `pose.y`.
+      mesh.position.set(pose.x, pose.y - current.halfH, pose.z)
       mesh.rotation.set(0, pose.rotY, 0)
       return
     }
