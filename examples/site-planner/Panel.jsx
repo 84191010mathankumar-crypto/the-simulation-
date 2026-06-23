@@ -104,12 +104,26 @@ export default function Panel({
   onSelectStorage, onDeleteStorage,
   showModel, onToggleModel,
   config, loadStatus, onReload,
+  simulating, onStartSim, onStopSim, simStats, simProgress, armCount,
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   function toggleTool(tool) {
+    if (simulating) return
     setActiveTool((cur) => (cur === tool ? null : tool))
   }
+
+  const missing = simStats?.missing ?? 0
+  const canSimulate = armCount > 0 && (simStats?.needed ?? 0) > 0
+  const storageWarning = missing > 0 ? (
+    <div className="sim-warning">
+      <strong>⚠ {missing} box{missing === 1 ? '' : 'es'} short.</strong>
+      <span>
+        The build needs {simStats.needed} boxes but storage only supplies {simStats.available}.
+        Add more storage areas (or enlarge existing ones) to cover the missing {missing}.
+      </span>
+    </div>
+  ) : null
 
   return (
     <aside className={`planner-panel ${drawerOpen ? 'drawer-open' : ''}`}>
@@ -144,6 +158,30 @@ export default function Panel({
             Site model
           </button>
         </div>
+
+        {/* Simulation — run the arms to build the pattern */}
+        <div className="sim-bar">
+          <button
+            className={`sim-run${simulating ? ' running' : ''}`}
+            onClick={simulating ? onStopSim : onStartSim}
+            disabled={!simulating && !canSimulate}
+            title={
+              armCount === 0 ? 'Place at least one robo arm first'
+                : (simStats?.needed ?? 0) === 0 ? 'Add build-result boxes first'
+                : simulating ? 'Stop the simulation' : 'Run the build simulation'
+            }
+          >
+            {simulating ? '■ Stop' : '▶ Build'}
+          </button>
+          <div className="sim-stats">
+            {simulating
+              ? <><b>{simProgress.done}</b> / {simStats.boxes.length} placed</>
+              : <>{armCount} arm{armCount === 1 ? '' : 's'} · {simStats?.needed ?? 0} boxes to build</>}
+          </div>
+        </div>
+        {missing > 0 && (
+          <div className="sim-bar-warning">⚠ {missing} box{missing === 1 ? '' : 'es'} short — see Storage</div>
+        )}
 
         <ToolSection
           num="01"
@@ -230,7 +268,12 @@ export default function Panel({
           onSelectItem={onSelectStorage}
           onDeleteItem={onDeleteStorage}
           renderLabel={(it, i) => `Storage ${i + 1}`}
-        />
+        >
+          {storageWarning}
+          {missing === 0 && (simStats?.needed ?? 0) > 0 && (
+            <div className="sim-ok">✓ {simStats.available} boxes available · {simStats.needed} needed</div>
+          )}
+        </ToolSection>
 
         <ToolSection
           num="06"

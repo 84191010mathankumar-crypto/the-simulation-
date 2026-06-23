@@ -3,68 +3,11 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Edges, Line } from '@react-three/drei'
 import * as THREE from 'three'
 import {
-  RobotArm, AnimationController, RobotStoreProvider,
+  AnimationController, RobotStoreProvider,
   GantryRobot, GantryAnimationController,
 } from 'robo-playground'
 import ZoneTool from './ZoneTool'
-
-/* ─── AGV chassis (same look as main demo's MobilePlatform) ─── */
-function MobilePlatform() {
-  return (
-    <group>
-      <mesh receiveShadow castShadow position={[0, 0.10, 0]}>
-        <boxGeometry args={[1.10, 0.18, 0.80]} />
-        <meshStandardMaterial color="#2b2d31" metalness={0.55} roughness={0.40} />
-      </mesh>
-      <mesh position={[0, 0.195, 0]}>
-        <boxGeometry args={[1.105, 0.005, 0.805]} />
-        <meshStandardMaterial color="#1a1c20" metalness={0.5} roughness={0.55} />
-      </mesh>
-      {[[-0.48, 0.34],[0.48, 0.34],[-0.48,-0.34],[0.48,-0.34]].map((p,i)=>(
-        <mesh key={i} position={[p[0],0.06,p[1]]} rotation={[0,0,Math.PI/2]} castShadow>
-          <cylinderGeometry args={[0.075,0.075,0.07,24]} />
-          <meshStandardMaterial color="#111316" metalness={0.4} roughness={0.55} />
-        </mesh>
-      ))}
-      <mesh receiveShadow castShadow position={[0, 0.21, 0]}>
-        <cylinderGeometry args={[0.30, 0.32, 0.025, 32]} />
-        <meshStandardMaterial color="#ff6000" metalness={0.30} roughness={0.50} />
-      </mesh>
-    </group>
-  )
-}
-
-/* Drives a robot's outer group from its store's platformPose.  Same shape
- * as the main demo's `RobotBase`, just per-instance. */
-function RobotOnPlatform({ store, robotColor }) {
-  const baseRef = useRef()
-  const setPlatformGroupRef = store((s) => s.setPlatformGroupRef)
-
-  useEffect(() => {
-    setPlatformGroupRef(baseRef.current || null)
-    return () => setPlatformGroupRef(null)
-  }, [setPlatformGroupRef])
-
-  useFrame(() => {
-    const g = baseRef.current
-    if (!g) return
-    const p = store.getState().platformPose
-    g.position.set(p.position[0], p.position[1], p.position[2])
-    g.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2])
-  })
-
-  return (
-    <group ref={baseRef}>
-      <MobilePlatform />
-      {/* A coloured ring under the AGV so different robots are easy to tell apart */}
-      <mesh rotation={[-Math.PI/2, 0, 0]} position={[0, 0.001, 0]}>
-        <ringGeometry args={[0.65, 0.78, 32]} />
-        <meshBasicMaterial color={robotColor} transparent opacity={0.55} side={THREE.DoubleSide} />
-      </mesh>
-      <RobotArm parentRef={baseRef} mountY={0.235} />
-    </group>
-  )
-}
+import MobileArmRobot from './MobileArmRobot'
 
 /* Static box rendered at world position.  The scheduler later reparents it
  * under a robot's gripper during 'grabbing'.
@@ -268,7 +211,7 @@ export default function WarehouseScene({
           <>
             {robots.map((r, i) => (
               <RobotStoreProvider key={r.id} store={r.store}>
-                <RobotOnPlatform store={r.store} robotColor={ROBOT_COLORS[i % ROBOT_COLORS.length]} />
+                <MobileArmRobot store={r.store} robotColor={ROBOT_COLORS[i % ROBOT_COLORS.length]} />
                 <AnimationController />
               </RobotStoreProvider>
             ))}

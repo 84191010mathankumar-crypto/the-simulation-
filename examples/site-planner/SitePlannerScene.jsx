@@ -1,11 +1,38 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, GizmoHelper, GizmoViewport, useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
+import { AnimationController, RobotStoreProvider } from 'robo-playground'
 import RectTool from './RectTool'
 import PointTool from './PointTool'
 import BuildResultTool from './BuildResultTool'
+import SimBox from './SimBox'
+import MobileArmRobot from '../warehouse/MobileArmRobot'
 import { GantryRobotVisual, GridAreaVisual, StorageVisual } from './RobotVisuals'
+
+const ROBOT_COLORS = ['#ff6000','#3b82f6','#10b981','#a855f7','#f43f5e','#eab308','#06b6d4','#fb7185','#84cc16']
+
+/* Headless — ticks the warehouse scheduler each frame while simulating. */
+function SchedulerTick({ scheduler }) {
+  useFrame(() => { scheduler.tick() })
+  return null
+}
+
+/* Mobile arms + carried boxes that run the build during simulation. */
+function Simulation({ robots, boxes, scheduler, registerMeshRef }) {
+  return (
+    <Suspense fallback={null}>
+      {robots.map((r, i) => (
+        <RobotStoreProvider key={r.id} store={r.store}>
+          <MobileArmRobot store={r.store} robotColor={ROBOT_COLORS[i % ROBOT_COLORS.length]} />
+          <AnimationController />
+        </RobotStoreProvider>
+      ))}
+      {boxes.map((b) => <SimBox key={b.id} box={b} registerMeshRef={registerMeshRef} />)}
+      <SchedulerTick scheduler={scheduler} />
+    </Suspense>
+  )
+}
 
 function CameraFit({ bounds }) {
   const { camera } = useThree()
@@ -26,8 +53,8 @@ function CameraFit({ bounds }) {
   return null
 }
 
-function SiteModel({ onBoundsReady, visible }) {
-  const { scene } = useGLTF(`${import.meta.env.BASE_URL}model/model.gltf`)
+function SiteModel({ onBoundsReady }) {
+  const { scene } = useGLTF(`${import.meta.env.BASE_URL}model/model-tex.gltf`)
 
   useEffect(() => {
     const box = new THREE.Box3().setFromObject(scene)
@@ -38,7 +65,7 @@ function SiteModel({ onBoundsReady, visible }) {
     onBoundsReady({ size, center })
   }, [scene, onBoundsReady])
 
-  return <primitive object={scene} visible={visible} />
+  return <primitive object={scene} />
 }
 
 function Loading() {
@@ -59,6 +86,7 @@ export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
   selectedId, showModel = true, gridSizeCm = 100, isArmValid,
+  simulating, simRobots, simBoxes, simScheduler, registerSimMeshRef,
   onCreateGantry, onSelectGantry, onUpdateGantry, onDeleteGantry,
   onCreateArm, onSelectArm, onUpdateArm,
   onCreateGrid, onSelectGrid, onUpdateGrid, onDeleteGrid,
@@ -96,9 +124,11 @@ export default function SitePlannerScene({
         <ambientLight intensity={0.6} />
         <directionalLight position={[30, 40, 20]} intensity={1.3} />
 
-        <Suspense fallback={<Loading />}>
-          <SiteModel onBoundsReady={setBounds} visible={showModel} />
-        </Suspense>
+        {showModel && (
+          <Suspense fallback={<Loading />}>
+            <SiteModel onBoundsReady={setBounds} />
+          </Suspense>
+        )}
         <CameraFit bounds={bounds} />
 
         <Suspense fallback={null}>
@@ -174,23 +204,35 @@ export default function SitePlannerScene({
             onDeselect={onDeselect}
           />
 
-          {/* Robo arm placements — real KUKA KR210 URDF, ring green/red based on validity */}
-          <PointTool
-            active={activeTool === 'arm'}
-            items={arms}
-            selectedId={activeTool === 'arm' ? null : selectedId}
-            isValid={isArmValid}
-            groundSize={groundSize}
-            selectable={!activeTool}
-            onCreate={onCreateArm}
-            onSelect={onSelectArm}
-            onUpdate={onUpdateArm}
-            onDeselect={onDeselect}
-          />
+          {/* Robo arms.  While simulating they become mobile AGV-mounted arms
+              that fetch boxes and build the pattern; otherwise they're the
+              static placement markers used for authoring the plan. */}
+          {simulating ? (
+            <Simulation
+              robots={simRobots}
+              boxes={simBoxes}
+              scheduler={simScheduler}
+              registerMeshRef={registerSimMeshRef}
+            />
+          ) : (
+            <PointTool
+              active={activeTool === 'arm'}
+              items={arms}
+              selectedId={activeTool === 'arm' ? null : selectedId}
+              isValid={isArmValid}
+              groundSize={groundSize}
+              selectable={!activeTool}
+              onCreate={onCreateArm}
+              onSelect={onSelectArm}
+              onUpdate={onUpdateArm}
+              onDeselect={onDeselect}
+            />
+          )}
 
-          {/* Build result — transparent box stack visualization */}
+          {/* Build result — transparent box stack visualization (the target
+              pattern).  Edit buttons are disabled while simulating. */}
           <BuildResultTool
-            active={activeTool === 'build'}
+            active={!simulating && activeTool === 'build'}
             grids={grids}
             gridSizeCm={gridSizeCm}
             buildCubes={buildCubes}

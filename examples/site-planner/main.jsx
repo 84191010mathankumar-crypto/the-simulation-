@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
+import { createRobotStore } from 'robo-playground'
 import Panel from './Panel'
 import SitePlannerScene from './SitePlannerScene'
+import { createScheduler } from '../warehouse/scheduler'
+import { buildSimulation } from './simulation'
 import '../warehouse/Panel.css'
 import './site-planner.css'
 
@@ -25,6 +28,8 @@ function App() {
   const [selectedId, setSelectedId]   = useState(null)
   const [loadStatus, setLoadStatus]   = useState('loading')
   const [showModel, setShowModel]     = useState(false)
+  const [simulating, setSimulating]   = useState(false)
+  const [simProgress, setSimProgress] = useState({ pending: 0, assigned: 0, done: 0 })
 
   const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
@@ -149,6 +154,100 @@ function App() {
     return onGrid && !blocked
   }, [grids, zones])
 
+  // ── Simulation ─────────────────────────────────────────────────
+  // Storage areas supply boxes; build cubes are the targets.  The arms ride
+  // AGVs and follow grid lines (handled by the lib AnimationController) while
+  // a warehouse-style scheduler assigns the pick-and-place tasks.
+  const unit = gridSizeCm / 100
+
+  // Anchor the AGV's grid lattice to the floor grid's cell centres so the
+  // robots travel along the same lines the boxes sit on.
+  const gridOrigin = useMemo(() => {
+    const g = grids[0]
+    if (!g) return [0, 0]
+    return [g.minX + unit / 2, g.minZ + unit / 2]
+  }, [grids, unit])
+
+  const sim = useMemo(
+    () => buildSimulation({ buildCubes, storageAreas, unit }),
+    [buildCubes, storageAreas, unit]
+  )
+
+  // One stable store per arm — created on demand, reused across renders so a
+  // loaded URDF isn't thrown away when an unrelated bit of state changes.
+  const storesRef = useRef(new Map())
+  const simRobots = useMemo(() => arms.map((a) => {
+    let store = storesRef.current.get(a.id)
+    if (!store) { store = createRobotStore(); storesRef.current.set(a.id, store) }
+    return { id: a.id, store, home: [a.x, 0, a.z] }
+  }), [arms])
+
+  // Push mobile-mode + grid settings into each arm's store as they change.
+  useEffect(() => {
+    const zoneList = zones.map((z) => ({ minX: z.minX, maxX: z.maxX, minZ: z.minZ, maxZ: z.maxZ }))
+    for (const r of simRobots) {
+      r.store.setState({
+        mobileMode: true,
+        parkingRef: 'self',
+        gridMovement: true,
+        gridCell: unit,
+        gridOrigin,
+        zones: zoneList,
+        platformPose: { position: r.home, rotation: [0, 0, 0] },
+        homePlatform: { position: r.home, rotation: [0, 0, 0] },
+      })
+    }
+  }, [simRobots, unit, gridOrigin, zones])
+
+  // Each carried box exposes a live ref into its scene mesh for the scheduler.
+  const simMeshRefs = useRef(new Map())
+  const registerSimMeshRef = useCallback((id, ref) => {
+    if (ref) simMeshRefs.current.set(id, ref)
+    else simMeshRefs.current.delete(id)
+  }, [])
+
+  const simBoxesForScene = useMemo(() => sim.boxes.map((b) => ({ ...b })), [sim.boxes])
+  const simBoxesForScheduler = useMemo(
+    () => sim.boxes.map((b) => ({ ...b, meshRef: { get current() { return simMeshRefs.current.get(b.id) } } })),
+    [sim.boxes]
+  )
+
+  const pushSimLog = useCallback(() => {}, [])
+  const simScheduler = useMemo(
+    () => createScheduler({ robots: simRobots, boxes: simBoxesForScheduler, onLog: pushSimLog }),
+    [simRobots, simBoxesForScheduler, pushSimLog]
+  )
+
+  const onStartSim = useCallback(() => {
+    setActiveTool(null)
+    setSelectedId(null)
+    setSimulating(true)
+    simScheduler.start()
+  }, [simScheduler])
+
+  const onStopSim = useCallback(() => {
+    simScheduler.reset()
+    setSimulating(false)
+    setSimProgress({ pending: sim.boxes.length, assigned: 0, done: 0 })
+  }, [simScheduler, sim.boxes.length])
+
+  // Stop the run cleanly if the plan is edited out from under it.
+  useEffect(() => {
+    if (simulating) { simScheduler.reset(); setSimulating(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.boxes])
+
+  // Poll task counts while running so the panel can show build progress.
+  useEffect(() => {
+    if (!simulating) return
+    const t = setInterval(() => {
+      const counts = { pending: 0, assigned: 0, done: 0 }
+      for (const task of simScheduler.tasks) counts[task.state] = (counts[task.state] || 0) + 1
+      setSimProgress(counts)
+    }, 200)
+    return () => clearInterval(t)
+  }, [simulating, simScheduler])
+
   const config = useMemo(() => ({
     gridSizeCm,
     gantryRobots: gantries.map(({ id, minX, maxX, minZ, maxZ }) => ({
@@ -182,6 +281,8 @@ function App() {
         onSelectStorage={onSelectStorage} onDeleteStorage={onDeleteStorage}
         showModel={showModel} onToggleModel={() => setShowModel((v) => !v)}
         config={config} loadStatus={loadStatus} onReload={loadConfig}
+        simulating={simulating} onStartSim={onStartSim} onStopSim={onStopSim}
+        simStats={sim} simProgress={simProgress} armCount={arms.length}
       />
       <SitePlannerScene
         showModel={showModel}
@@ -191,6 +292,8 @@ function App() {
         selectedId={selectedId}
         gridSizeCm={gridSizeCm}
         isArmValid={isArmValid}
+        simulating={simulating} simRobots={simRobots} simBoxes={simBoxesForScene}
+        simScheduler={simScheduler} registerSimMeshRef={registerSimMeshRef}
         onCreateGantry={onCreateGantry} onSelectGantry={onSelectGantry} onUpdateGantry={onUpdateGantry} onDeleteGantry={onDeleteGantry}
         onCreateArm={onCreateArm} onSelectArm={onSelectArm} onUpdateArm={onUpdateArm}
         onCreateGrid={onCreateGrid} onSelectGrid={onSelectGrid} onUpdateGrid={onUpdateGrid} onDeleteGrid={onDeleteGrid}

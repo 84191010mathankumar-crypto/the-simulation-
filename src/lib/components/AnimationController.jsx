@@ -62,12 +62,16 @@ function computePlatformPoseFor(targetWorldPos, currentPlatformPos, parkingRef) 
 // (not just its centre point) stays clear of them.
 const AGV_CLEARANCE = 0.65
 
-// Must match the floor <Grid cellSize> in WarehouseScene so a "grid line"
-// here is the same line the player sees drawn on the floor.
+// Default floor <Grid cellSize> — a "grid line" here is the same line the
+// player sees drawn on the floor.  The active cell/origin are read from the
+// store each frame (gridCell/gridOrigin) so a scene with a different grid
+// unit (e.g. the site planner's gridSizeCm) snaps to its own lines; these
+// constants are just the fallbacks that reproduce the original 1 m grid.
 const GRID_CELL = 1
+const GRID_ORIGIN = [0, 0]
 
-function snapToGrid(v) {
-  return Math.round(v / GRID_CELL) * GRID_CELL
+function snapToGrid(v, cell = GRID_CELL, origin = 0) {
+  return Math.round((v - origin) / cell) * cell + origin
 }
 
 /* Snaps `v` to a grid line, but biased towards `other` instead of to the
@@ -79,9 +83,10 @@ function snapToGrid(v) {
  * Rounding towards `other` instead guarantees the snapped value always
  * lies between v and other — i.e. the hop is always progress, never a
  * step back. */
-function snapBiased(v, other) {
-  if (Math.abs(other - v) < 1e-9) return snapToGrid(v)
-  return other > v ? Math.ceil(v / GRID_CELL) * GRID_CELL : Math.floor(v / GRID_CELL) * GRID_CELL
+function snapBiased(v, other, cell = GRID_CELL, origin = 0) {
+  if (Math.abs(other - v) < 1e-9) return snapToGrid(v, cell, origin)
+  const n = (v - origin) / cell
+  return (other > v ? Math.ceil(n) : Math.floor(n)) * cell + origin
 }
 
 /* Does the segment p0→p1 (2D, [x,z]) cross the zone's rectangle, expanded
@@ -174,7 +179,7 @@ function axisAlignPath(waypoints) {
  * forever; in practice a handful of user-drawn zones resolves in 1-2 passes.
  * Each detour is re-axis-aligned immediately (when gridMovement is on) so
  * the new corner never introduces a diagonal hop either. */
-function resolveZoneCrossings(path, zones, gridMovement) {
+function resolveZoneCrossings(path, zones, gridMovement, cell = GRID_CELL, origin = GRID_ORIGIN) {
   if (!zones || zones.length === 0) return path
   let result = path
   for (let pass = 0; pass < 12; pass++) {
@@ -186,9 +191,9 @@ function resolveZoneCrossings(path, zones, gridMovement) {
       if (!blocker) continue
       // Extra margin when grid-snapping the corner below, so rounding it onto
       // the nearest grid line can't pull it back inside the AGV's clearance.
-      const margin = gridMovement ? AGV_CLEARANCE + GRID_CELL : AGV_CLEARANCE
+      const margin = gridMovement ? AGV_CLEARANCE + cell : AGV_CLEARANCE
       let corner = pickDetourCorner(a2, b2, blocker, zones, margin)
-      if (gridMovement) corner = [snapToGrid(corner[0]), snapToGrid(corner[1])]
+      if (gridMovement) corner = [snapToGrid(corner[0], cell, origin[0]), snapToGrid(corner[1], cell, origin[1])]
       const mid = [corner[0], a[1], corner[1]]
       result = [...result.slice(0, i + 1), mid, ...result.slice(i + 1)]
       if (gridMovement) result = axisAlignPath(result)
@@ -227,7 +232,7 @@ function legPosition(a, b, u) {
  * result is both correct (never enters a zone) and visually sane (no
  * needless zig-zagging). Returns null if no route exists in the searched
  * area (caller falls back to the simple corner-bounce in that case). */
-function bfsGridPath(start2, goal2, zones) {
+function bfsGridPath(start2, goal2, zones, cell = GRID_CELL) {
   const margin = AGV_CLEARANCE
   const blocked = (x, z) => zones.some((zo) =>
     x >= zo.minX - margin && x <= zo.maxX + margin && z >= zo.minZ - margin && z <= zo.maxZ + margin)
@@ -238,14 +243,14 @@ function bfsGridPath(start2, goal2, zones) {
   const minX = Math.floor(Math.min(...xs)) - pad, maxX = Math.ceil(Math.max(...xs)) + pad
   const minZ = Math.floor(Math.min(...zs)) - pad, maxZ = Math.ceil(Math.max(...zs)) + pad
   // Safety cap so a pathological zone spread can't search forever.
-  if (((maxX - minX) / GRID_CELL + 1) * ((maxZ - minZ) / GRID_CELL + 1) > 4000) return null
+  if (((maxX - minX) / cell + 1) * ((maxZ - minZ) / cell + 1) > 4000) return null
   if (blocked(start2[0], start2[1]) || blocked(goal2[0], goal2[1])) return null
 
   const key = (x, z) => `${x},${z}`
   const goalKey = key(goal2[0], goal2[1])
   const cameFrom = new Map([[key(start2[0], start2[1]), null]])
   const queue = [start2]
-  const DIRS = [[GRID_CELL, 0], [-GRID_CELL, 0], [0, GRID_CELL], [0, -GRID_CELL]]
+  const DIRS = [[cell, 0], [-cell, 0], [0, cell], [0, -cell]]
 
   for (let qi = 0; qi < queue.length; qi++) {
     const [x, z] = queue[qi]
@@ -284,21 +289,22 @@ function bfsGridPath(start2, goal2, zones) {
  * those grid points, then hook the unavoidable short off-grid stub at each
  * end back up — resolveZoneCrossings runs last as a safety net for those
  * two stubs only, since the BFS portion is already provably zone-clear. */
-function buildSafePath(fromPos, toPos, zones, gridMovement) {
+function buildSafePath(fromPos, toPos, zones, gridMovement, cell = GRID_CELL, origin = GRID_ORIGIN) {
   if (!gridMovement) return resolveZoneCrossings([fromPos, toPos], zones, false)
 
   const y = fromPos[1]
-  const aSnap2 = [snapBiased(fromPos[0], toPos[0]), snapBiased(fromPos[2], toPos[2])]
-  const bSnap2 = [snapBiased(toPos[0], fromPos[0]), snapBiased(toPos[2], fromPos[2])]
+  const [ox, oz] = origin
+  const aSnap2 = [snapBiased(fromPos[0], toPos[0], cell, ox), snapBiased(fromPos[2], toPos[2], cell, oz)]
+  const bSnap2 = [snapBiased(toPos[0], fromPos[0], cell, ox), snapBiased(toPos[2], fromPos[2], cell, oz)]
   const core2 = (zones && zones.length > 0 && (aSnap2[0] !== bSnap2[0] || aSnap2[1] !== bSnap2[1]))
-    ? bfsGridPath(aSnap2, bSnap2, zones)
+    ? bfsGridPath(aSnap2, bSnap2, zones, cell)
     : null
   const corePoints2 = core2 || [aSnap2, bSnap2]
 
   let path = [fromPos, ...corePoints2.map((p) => [p[0], y, p[1]]), toPos]
   path = dedupePath(path)
   path = axisAlignPath(path)
-  return resolveZoneCrossings(path, zones, true)
+  return resolveZoneCrossings(path, zones, true, cell, origin)
 }
 
 /* Drops consecutive points that are (almost) the same — happens whenever
@@ -412,7 +418,7 @@ export default function AnimationController() {
         useStore.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
           fromPlatform: currentPlatform, toPlatform: homePlatform,
-          platformPath: buildSafePath(currentPlatform.position, homePlatform.position, store.zones, store.gridMovement),
+          platformPath: buildSafePath(currentPlatform.position, homePlatform.position, store.zones, store.gridMovement, store.gridCell, store.gridOrigin),
         })
         store.addLog('info', 'Returning to HOME…')
       } else {
@@ -494,7 +500,7 @@ function _solveSegment(useStore, store, target, currentAngles, currentPlatform) 
     useStore.setState({
       fromAngles: currentAngles, toAngles: clamped,
       fromPlatform: currentPlatform, toPlatform: targetPlatform,
-      platformPath: buildSafePath(currentPlatform.position, targetPlatform.position, store.zones, store.gridMovement),
+      platformPath: buildSafePath(currentPlatform.position, targetPlatform.position, store.zones, store.gridMovement, store.gridCell, store.gridOrigin),
     })
   } else {
     addLog('warn', `IK did not converge for ${target} — target may be out of reach`)

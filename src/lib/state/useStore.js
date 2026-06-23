@@ -110,6 +110,12 @@ export function createRobotStore() {
     // When true (the default), the AGV's path is snapped onto the floor's
     // grid lines instead of travelling in a straight diagonal line.
     gridMovement: true,
+    // Grid spacing (metres) the AGV snaps to, and the lattice origin so the
+    // snapped lines coincide with the floor grid the player actually sees.
+    // Defaults reproduce the original 1 m grid anchored at world origin, so
+    // the main demo / warehouse behave exactly as before.
+    gridCell: 1,
+    gridOrigin: [0, 0],
     // User-drawn no-go rectangles ({ id, minX, maxX, minZ, maxZ }) the AGV
     // routes around instead of driving through.
     zones: [],
@@ -137,6 +143,8 @@ export function createRobotStore() {
     setHomePlatform:     (p) => set({ homePlatform: p }),
     setParkingRef:       (v) => set({ parkingRef: v }),
     setGridMovement:     (v) => set({ gridMovement: v }),
+    setGridCell:         (v) => set({ gridCell: v }),
+    setGridOrigin:       (v) => set({ gridOrigin: v }),
     setZones:            (v) => set({ zones: v }),
     setPlatformGroupRef: (r) => set({ platformGroupRef: r }),
     setAnimProgress:     (p) => set({ animProgress: p }),
