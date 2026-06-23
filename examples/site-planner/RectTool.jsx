@@ -45,7 +45,7 @@ function cornerPos(corner, rect, y) {
   return [x, y, z]
 }
 
-function Rect({ rect, selected, preview, color, y, onSelect, onStartDrag }) {
+function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelect, onStartDrag }) {
   const w = Math.max(0.05, rect.maxX - rect.minX)
   const d = Math.max(0.05, rect.maxZ - rect.minZ)
   const cx = (rect.minX + rect.maxX) / 2
@@ -61,11 +61,12 @@ function Rect({ rect, selected, preview, color, y, onSelect, onStartDrag }) {
         <meshStandardMaterial
           color={color}
           transparent
-          opacity={preview ? 0.25 : selected ? 0.38 : 0.22}
+          opacity={preview ? 0.25 : selected ? Math.min(1, opacity * 1.7) : opacity}
           depthWrite={false}
         />
         <Edges color={color} />
       </mesh>
+      {renderRobot && !preview && renderRobot(rect)}
       {selected && !preview && CORNERS.map((c) => (
         <mesh
           key={c}
@@ -81,8 +82,8 @@ function Rect({ rect, selected, preview, color, y, onSelect, onStartDrag }) {
 }
 
 export default function RectTool({
-  active, items = [], selectedId, color = '#dc2626', y = 0.12, groundSize,
-  onCreate, onSelect, onUpdate, onDeselect,
+  active, items = [], selectedId, color = '#dc2626', y = 0.12, opacity = 0.22, groundSize,
+  renderRobot, onCreate, onSelect, onUpdate, onDeselect,
 }) {
   const { camera, gl } = useThree()
   const [firstPoint, setFirstPoint] = useState(null)
@@ -151,6 +152,8 @@ export default function RectTool({
           rect={it}
           color={color}
           y={y}
+          opacity={opacity}
+          renderRobot={renderRobot}
           selected={it.id === selectedId}
           onSelect={active ? null : () => onSelect(it.id)}
           onStartDrag={(corner) => {
@@ -166,6 +169,7 @@ export default function RectTool({
           rect={normalizeRect({ minX: firstPoint[0], maxX: previewPoint[0], minZ: firstPoint[1], maxZ: previewPoint[1] })}
           color={color}
           y={y}
+          opacity={opacity}
           preview
         />
       )}

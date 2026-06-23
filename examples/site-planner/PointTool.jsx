@@ -9,6 +9,7 @@
 import React, { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { RoboArmVisual } from './RobotVisuals'
 
 const _raycaster = new THREE.Raycaster()
 const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -25,30 +26,25 @@ function groundPointFromEvent(e, camera, dom) {
   return [_hit.x, _hit.z]
 }
 
-function ArmMarker({ point, selected, color, onSelect, onStartDrag }) {
+function ArmMarker({ point, selected, valid, onSelect, onStartDrag }) {
   return (
-    <group position={[point.x, 0, point.z]}>
+    <group>
+      {/* Invisible, generously-sized hit target — the robot silhouette
+          underneath is too thin/irregular to reliably click on directly. */}
       <mesh
-        position={[0, 0.45, 0]}
+        position={[point.x, 0.6, point.z]}
         onPointerDown={(e) => { e.stopPropagation(); onStartDrag(); if (onSelect) onSelect() }}
       >
-        <cylinderGeometry args={[0.05, 0.05, 0.9, 12]} />
-        <meshStandardMaterial color={color} />
+        <cylinderGeometry args={[0.45, 0.45, 1.3, 16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      <mesh position={[0, 0.9, 0]} onPointerDown={(e) => { e.stopPropagation(); onStartDrag(); if (onSelect) onSelect() }}>
-        <sphereGeometry args={[0.16, 16, 16]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={selected ? 0.6 : 0.15} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <ringGeometry args={[0.18, 0.26, 24]} />
-        <meshBasicMaterial color={color} transparent opacity={selected ? 0.9 : 0.5} side={THREE.DoubleSide} />
-      </mesh>
+      <RoboArmVisual x={point.x} z={point.z} valid={valid} highlight={selected} />
     </group>
   )
 }
 
 export default function PointTool({
-  active, items = [], selectedId, color = '#3b82f6', groundSize,
+  active, items = [], selectedId, isValid, groundSize,
   onCreate, onSelect, onUpdate, onDeselect,
 }) {
   const { camera, gl } = useThree()
@@ -93,7 +89,7 @@ export default function PointTool({
         <ArmMarker
           key={it.id}
           point={it}
-          color={color}
+          valid={isValid ? isValid(it) : true}
           selected={it.id === selectedId}
           onSelect={active ? null : () => onSelect(it.id)}
           onStartDrag={() => { dragRef.current = it.id }}

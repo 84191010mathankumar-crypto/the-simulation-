@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import Panel from './Panel'
 import JsonBar from './JsonBar'
@@ -7,6 +7,14 @@ import '../warehouse/Panel.css'
 import './site-planner.css'
 
 const round = (n) => Math.round(n * 100) / 100
+const CONFIG_URL = `${import.meta.env.BASE_URL}site-config.json`
+
+// Keeps the per-type id counters ahead of whatever numbers are already used
+// in a loaded config, so newly-placed items never collide with loaded ones.
+function bumpCounter(nextId, type, id) {
+  const n = Number(String(id).split('-').pop())
+  if (Number.isFinite(n) && n >= nextId.current[type]) nextId.current[type] = n + 1
+}
 
 function App() {
   const [gantries, setGantries] = useState([])
@@ -14,9 +22,33 @@ function App() {
   const [grids, setGrids] = useState([])
   const [activeTool, setActiveTool] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
+  const [loadStatus, setLoadStatus] = useState('loading') // 'loading' | 'loaded' | 'empty' | 'error'
 
   const nextId = useRef({ gantry: 1, arm: 1, grid: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
+
+  // ── Load site-config.json on page open ──────────────────────────────
+  const loadConfig = useCallback(() => {
+    setLoadStatus('loading')
+    fetch(CONFIG_URL, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) { setLoadStatus('empty'); return }
+        const loadedGantries = data.gantryRobots || []
+        const loadedArms = data.roboArms || []
+        const loadedGrids = data.grids || []
+        loadedGantries.forEach((it) => bumpCounter(nextId, 'gantry', it.id))
+        loadedArms.forEach((it) => bumpCounter(nextId, 'arm', it.id))
+        loadedGrids.forEach((it) => bumpCounter(nextId, 'grid', it.id))
+        setGantries(loadedGantries)
+        setArms(loadedArms)
+        setGrids(loadedGrids)
+        setLoadStatus('loaded')
+      })
+      .catch(() => setLoadStatus('error'))
+  }, [])
+
+  useEffect(() => { loadConfig() }, [loadConfig])
 
   // ── Gantry areas (rect) ────────────────────────────────────────────
   const onCreateGantry = (rect) => {
@@ -90,7 +122,7 @@ function App() {
           onDeselect={onDeselect}
         />
       </div>
-      <JsonBar config={config} />
+      <JsonBar config={config} loadStatus={loadStatus} onReload={loadConfig} />
     </div>
   )
 }

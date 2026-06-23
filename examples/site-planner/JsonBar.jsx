@@ -1,6 +1,13 @@
 import React, { useState } from 'react'
 
-export default function JsonBar({ config }) {
+const STATUS_HINT = {
+  loading: 'loading saved layout from public/site-config.json…',
+  loaded: 'loaded from public/site-config.json — paste new JSON in there to update what auto-loads',
+  empty: 'public/site-config.json is empty — paste the JSON below into that file so it auto-loads next time',
+  error: "couldn't read public/site-config.json — paste the JSON below into that file so it auto-loads next time",
+}
+
+export default function JsonBar({ config, loadStatus, onReload }) {
   const [copied, setCopied] = useState(false)
   const json = JSON.stringify(config, null, 2)
 
@@ -15,7 +22,8 @@ export default function JsonBar({ config }) {
     <div className="json-bar">
       <div className="json-bar-head">
         <span className="json-bar-title">Config JSON</span>
-        <span className="json-bar-hint">copy this into your config file to load the layout later</span>
+        <span className="json-bar-hint">{STATUS_HINT[loadStatus] || STATUS_HINT.empty}</span>
+        <button className="btn-secondary" onClick={onReload}>Reload from file</button>
         <button className="btn-secondary" onClick={handleCopy}>{copied ? 'Copied!' : 'Copy JSON'}</button>
       </div>
       <textarea className="json-bar-text" readOnly value={json} spellCheck={false} />
