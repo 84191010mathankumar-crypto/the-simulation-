@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Edges, Html } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -29,6 +29,35 @@ function normalizeRect(r) {
 
 const CORNERS = ['XminZmin', 'XminZmax', 'XmaxZmin', 'XmaxZmax']
 
+const CORNER_PX = 6
+const _wp = new THREE.Vector3()
+
+function CornerHandle({ position, color, onPointerDown }) {
+  const ref = useRef()
+  const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
+
+  useFrame(() => {
+    if (!ref.current) return
+    ref.current.getWorldPosition(_wp)
+    let s
+    if (camera.isPerspectiveCamera) {
+      const dist = camera.position.distanceTo(_wp)
+      s = (CORNER_PX / size.height) * 2 * dist * Math.tan((camera.fov * Math.PI / 180) / 2)
+    } else {
+      s = CORNER_PX * (camera.top - camera.bottom) / size.height
+    }
+    ref.current.scale.setScalar(s)
+  })
+
+  return (
+    <mesh ref={ref} position={position} renderOrder={999} onPointerDown={onPointerDown}>
+      <sphereGeometry args={[1, 16, 16]} />
+      <meshStandardMaterial color="#ffffff" depthTest={false} />
+    </mesh>
+  )
+}
+
 /**
  * Returns an onPointerDown handler that only fires `callback` if the pointer
  * was released within a small radius — i.e. a real click, not an orbit/pan
@@ -37,8 +66,8 @@ const CORNERS = ['XminZmin', 'XminZmax', 'XmaxZmin', 'XmaxZmax']
  */
 function clickSelect(callback) {
   return (e) => {
-    e.stopPropagation()
     if (!callback) return
+    e.stopPropagation()
     const sx = e.clientX, sy = e.clientY
     const onUp = (ev) => {
       window.removeEventListener('pointerup', onUp)
@@ -141,14 +170,12 @@ function Rect({ rect, selected, preview, color, y, opacity, outlineOnly, renderR
       )}
       {renderRobot && !preview && renderRobot(rect)}
       {selected && !preview && CORNERS.map((c) => (
-          <mesh
-            key={c}
-            position={cornerPos(c, rect, y + 0.15)}
-            onPointerDown={(e) => { e.stopPropagation(); onStartDrag(c) }}
-          >
-          <sphereGeometry args={[0.14, 16, 16]} />
-          <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.6} />
-        </mesh>
+        <CornerHandle
+          key={c}
+          position={cornerPos(c, rect, y + 0.15)}
+          color={color}
+          onPointerDown={(e) => { e.stopPropagation(); onStartDrag(c) }}
+        />
       ))}
       {selected && !preview && onDelete && (
         <Html
@@ -257,7 +284,7 @@ export default function RectTool({
           outlineOnly={outlineOnly}
           renderRobot={renderRobot}
           selected={it.id === selectedId}
-          onSelect={selectable ? () => onSelect(it.id) : null}
+          onSelect={!active && selectable ? () => onSelect(it.id) : null}
           onDelete={onDelete ? () => onDelete(it.id) : null}
           onStartDrag={(corner) => {
             const anchorX = corner.includes('Xmin') ? it.maxX : it.minX
