@@ -25,7 +25,7 @@ export default function GantryCarriedObject({ color = '#ebe4d2' }) {
     mesh.visible = true
 
     if (carrying) {
-      mesh.position.set(pose.x, pose.y - BOX_HALF * 1.3, pose.z)
+      mesh.position.set(pose.x, pose.y, pose.z)
       mesh.rotation.set(0, pose.rotY, 0)
       return
     }

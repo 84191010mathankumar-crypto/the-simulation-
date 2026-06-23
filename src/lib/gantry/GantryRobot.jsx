@@ -6,6 +6,11 @@ import useGantryStore, { RAIL_Y } from './useGantryStore'
 export const TRAVEL_X = 1.85
 export const TRAVEL_Z = 1.35
 
+// Distance from the gripper's mast attachment point down to the fingertips
+// (its actual pinch point) — the mast has to fall short by this much so the
+// fingertips, not the gripper's mounting block, land exactly on `pose.y`.
+const GRIPPER_HEIGHT = 0.20
+
 const steel    = { color: '#2b2d31', metalness: 0.55, roughness: 0.4 }
 const accent   = { color: '#ff6000', metalness: 0.3,  roughness: 0.5 }
 const dark     = { color: '#16181b', metalness: 0.5,  roughness: 0.55 }
@@ -84,7 +89,7 @@ export default function GantryRobot() {
     if (bridgeRef.current)  bridgeRef.current.position.x = pose.x
     if (trolleyRef.current) trolleyRef.current.position.z = pose.z
 
-    const mastLen = Math.max(0.05, RAIL_Y - pose.y)
+    const mastLen = Math.max(0.05, RAIL_Y - GRIPPER_HEIGHT - pose.y)
     if (mastRef.current) {
       mastRef.current.scale.y = mastLen
       mastRef.current.position.y = -mastLen / 2
