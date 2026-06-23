@@ -29,6 +29,25 @@ function normalizeRect(r) {
 
 const CORNERS = ['XminZmin', 'XminZmax', 'XmaxZmin', 'XmaxZmax']
 
+/**
+ * Returns an onPointerDown handler that only fires `callback` if the pointer
+ * was released within a small radius — i.e. a real click, not an orbit/pan
+ * drag.  Always stopPropagation so the active tool's floor plane doesn't also
+ * receive a draw click on top of an existing item.
+ */
+function clickSelect(callback) {
+  return (e) => {
+    e.stopPropagation()
+    if (!callback) return
+    const sx = e.clientX, sy = e.clientY
+    const onUp = (ev) => {
+      window.removeEventListener('pointerup', onUp)
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) callback()
+    }
+    window.addEventListener('pointerup', onUp)
+  }
+}
+
 function cornerPos(corner, rect, y) {
   const x = corner.includes('Xmin') ? rect.minX : rect.maxX
   const z = corner.includes('Zmin') ? rect.minZ : rect.maxZ
@@ -45,7 +64,7 @@ function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelec
     <group>
       <mesh
         position={[cx, y, cz]}
-        onPointerDown={(e) => { if (onSelect) { e.stopPropagation(); onSelect() } }}
+        onPointerDown={clickSelect(onSelect)}
       >
         <boxGeometry args={[w, 0.05, d]} />
         <meshStandardMaterial
@@ -58,11 +77,11 @@ function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelec
       </mesh>
       {renderRobot && !preview && renderRobot(rect)}
       {selected && !preview && CORNERS.map((c) => (
-        <mesh
-          key={c}
-          position={cornerPos(c, rect, y + 0.15)}
-          onPointerDown={(e) => { e.stopPropagation(); onStartDrag(c) }}
-        >
+          <mesh
+            key={c}
+            position={cornerPos(c, rect, y + 0.15)}
+            onPointerDown={(e) => { e.stopPropagation(); onStartDrag(c) }}
+          >
           <sphereGeometry args={[0.14, 16, 16]} />
           <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.6} />
         </mesh>
@@ -75,7 +94,7 @@ function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelec
           zIndexRange={[100, 0]}
         >
           <button
-            onPointerDown={(e) => { e.stopPropagation(); onDelete() }}
+            onPointerDown={clickSelect(onDelete)}
             style={{
               width: 22, height: 22, borderRadius: '50%',
               background: '#dc2626', border: '2px solid #fff',
@@ -94,6 +113,7 @@ function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelec
 
 export default function RectTool({
   active, items = [], selectedId, color = '#dc2626', y = 0.12, opacity = 0.22, groundSize,
+  selectable = true,
   renderRobot, onCreate, onSelect, onUpdate, onDelete, onDeselect,
 }) {
   const { camera, gl } = useThree()
@@ -172,7 +192,7 @@ export default function RectTool({
           opacity={opacity}
           renderRobot={renderRobot}
           selected={it.id === selectedId}
-          onSelect={active ? null : () => onSelect(it.id)}
+          onSelect={selectable ? () => onSelect(it.id) : null}
           onDelete={onDelete ? () => onDelete(it.id) : null}
           onStartDrag={(corner) => {
             const anchorX = corner.includes('Xmin') ? it.maxX : it.minX

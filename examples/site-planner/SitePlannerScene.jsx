@@ -108,6 +108,7 @@ export default function SitePlannerScene({
             color="#ff6000"
             y={0.10}
             groundSize={groundSize}
+            selectable={!activeTool}
             renderRobot={(rect) => <GantryRobotVisual rect={rect} />}
             onCreate={onCreateGantry}
             onSelect={onSelectGantry}
@@ -124,6 +125,7 @@ export default function SitePlannerScene({
             color="#1d4ed8"
             y={0.05}
             groundSize={groundSize}
+            selectable={!activeTool}
             renderRobot={(rect) => <GridAreaVisual rect={rect} gridSizeCm={gridSizeCm} />}
             onCreate={onCreateGrid}
             onSelect={onSelectGrid}
@@ -141,6 +143,7 @@ export default function SitePlannerScene({
             opacity={0.28}
             y={0.03}
             groundSize={groundSize}
+            selectable={!activeTool}
             onCreate={onCreateZone}
             onSelect={onSelectZone}
             onUpdate={onUpdateZone}
@@ -157,6 +160,7 @@ export default function SitePlannerScene({
             opacity={0.22}
             y={0.04}
             groundSize={groundSize}
+            selectable={!activeTool}
             renderRobot={(rect) => <StorageVisual rect={rect} gridSizeCm={gridSizeCm} />}
             onCreate={onCreateStorage}
             onSelect={onSelectStorage}
@@ -172,6 +176,7 @@ export default function SitePlannerScene({
             selectedId={activeTool === 'arm' ? null : selectedId}
             isValid={isArmValid}
             groundSize={groundSize}
+            selectable={!activeTool}
             onCreate={onCreateArm}
             onSelect={onSelectArm}
             onUpdate={onUpdateArm}

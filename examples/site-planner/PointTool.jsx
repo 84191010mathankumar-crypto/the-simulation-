@@ -18,13 +18,25 @@ function groundPointFromEvent(e, camera, dom) {
   return [_hit.x, _hit.z]
 }
 
-function ArmMarker({ point, selected, valid, onSelect, onStartDrag }) {
+function ArmMarker({ point, selected, valid, selectable, onSelect, onStartDrag }) {
+  if (!selectable) return <PlacedKukaArm x={point.x} z={point.z} valid={valid} highlight={selected} />
   return (
     <group>
       {/* Invisible hit-target — the URDF mesh surfaces are complex to click on. */}
       <mesh
         position={[point.x, 0.6, point.z]}
-        onPointerDown={(e) => { e.stopPropagation(); onStartDrag(); if (onSelect) onSelect() }}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          onStartDrag()
+          if (onSelect) {
+            const sx = e.clientX, sy = e.clientY
+            const onUp = (ev) => {
+              window.removeEventListener('pointerup', onUp)
+              if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) onSelect()
+            }
+            window.addEventListener('pointerup', onUp)
+          }
+        }}
       >
         <cylinderGeometry args={[0.45, 0.45, 1.3, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
@@ -36,6 +48,7 @@ function ArmMarker({ point, selected, valid, onSelect, onStartDrag }) {
 
 export default function PointTool({
   active, items = [], selectedId, isValid, groundSize,
+  selectable = true,
   onCreate, onSelect, onUpdate, onDeselect,
 }) {
   const { camera, gl } = useThree()
@@ -90,6 +103,7 @@ export default function PointTool({
           point={it}
           valid={isValid ? isValid(it) : true}
           selected={it.id === selectedId}
+          selectable={selectable}
           onSelect={active ? null : () => onSelect(it.id)}
           onStartDrag={() => { dragRef.current = it.id }}
         />
