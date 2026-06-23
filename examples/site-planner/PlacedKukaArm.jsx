@@ -75,7 +75,10 @@ function getTemplate() {
       }
       robot.updateMatrixWorld(true)
       resolve(robot)
-    }, undefined, reject)
+    }, undefined, (err) => {
+      _templatePromise = null  // allow retry on next mount
+      reject(err)
+    })
   })
   return _templatePromise
 }

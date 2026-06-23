@@ -1,16 +1,6 @@
-/**
- * Generic "draw a rectangle on the floor" tool — used for both gantry
- * operating areas and grid areas. Click two points on the floor to draw a
- * rectangle; click an existing rectangle to select it and drag its corner
- * handles to resize.
- *
- * This is the same interaction as the warehouse demo's ZoneTool, just made
- * reusable so the site planner can have several independent rectangle
- * layers (one per item type) with their own colour.
- */
 import React, { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Edges } from '@react-three/drei'
+import { Edges, Html } from '@react-three/drei'
 import * as THREE from 'three'
 
 const _raycaster = new THREE.Raycaster()
@@ -45,7 +35,7 @@ function cornerPos(corner, rect, y) {
   return [x, y, z]
 }
 
-function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelect, onStartDrag }) {
+function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelect, onDelete, onStartDrag }) {
   const w = Math.max(0.05, rect.maxX - rect.minX)
   const d = Math.max(0.05, rect.maxZ - rect.minZ)
   const cx = (rect.minX + rect.maxX) / 2
@@ -70,22 +60,44 @@ function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelec
       {selected && !preview && CORNERS.map((c) => (
         <mesh
           key={c}
-          position={cornerPos(c, rect, y + 0.1)}
+          position={cornerPos(c, rect, y + 0.15)}
           onPointerDown={(e) => { e.stopPropagation(); onStartDrag(c) }}
         >
-          <sphereGeometry args={[0.12, 16, 16]} />
-          <meshStandardMaterial color={color} />
+          <sphereGeometry args={[0.14, 16, 16]} />
+          <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.6} />
         </mesh>
       ))}
+      {selected && !preview && onDelete && (
+        <Html
+          center
+          position={[cx, y + 0.5, cz]}
+          style={{ pointerEvents: 'all' }}
+          zIndexRange={[100, 0]}
+        >
+          <button
+            onPointerDown={(e) => { e.stopPropagation(); onDelete() }}
+            style={{
+              width: 22, height: 22, borderRadius: '50%',
+              background: '#dc2626', border: '2px solid #fff',
+              color: '#fff', cursor: 'pointer', fontSize: 16,
+              fontWeight: 700, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              padding: 0,
+            }}
+          >−</button>
+        </Html>
+      )}
     </group>
   )
 }
 
 export default function RectTool({
   active, items = [], selectedId, color = '#dc2626', y = 0.12, opacity = 0.22, groundSize,
-  renderRobot, onCreate, onSelect, onUpdate, onDeselect,
+  renderRobot, onCreate, onSelect, onUpdate, onDelete, onDeselect,
 }) {
   const { camera, gl } = useThree()
+  const controls = useThree((s) => s.controls)
   const [firstPoint, setFirstPoint] = useState(null)
   const [previewPoint, setPreviewPoint] = useState(null)
   const dragRef = useRef(null)
@@ -103,6 +115,7 @@ export default function RectTool({
       if (!p) return
 
       if (dragRef.current) {
+        if (controls) controls.enabled = false
         const { itemId, anchorX, anchorZ } = dragRef.current
         const cx = Math.max(-half, Math.min(half, p[0]))
         const cz = Math.max(-half, Math.min(half, p[1]))
@@ -113,7 +126,12 @@ export default function RectTool({
       if (active && firstPoint) setPreviewPoint(p)
     }
 
-    function handleUp() { dragRef.current = null }
+    function handleUp() {
+      if (dragRef.current) {
+        dragRef.current = null
+        if (controls) controls.enabled = true
+      }
+    }
 
     dom.addEventListener('pointermove', handleMove)
     dom.addEventListener('pointerup', handleUp)
@@ -121,7 +139,7 @@ export default function RectTool({
       dom.removeEventListener('pointermove', handleMove)
       dom.removeEventListener('pointerup', handleUp)
     }
-  }, [active, firstPoint, onUpdate, camera, gl, groundSize])
+  }, [active, firstPoint, onUpdate, camera, gl, groundSize, controls])
 
   function handleFloorDown(e) {
     if (!active) { onDeselect(); return }
@@ -140,7 +158,6 @@ export default function RectTool({
 
   return (
     <group>
-      {/* Invisible click-catcher covering the whole ground footprint. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y - 0.06, 0]} onPointerDown={handleFloorDown}>
         <planeGeometry args={[groundSize, groundSize]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
@@ -156,10 +173,12 @@ export default function RectTool({
           renderRobot={renderRobot}
           selected={it.id === selectedId}
           onSelect={active ? null : () => onSelect(it.id)}
+          onDelete={onDelete ? () => onDelete(it.id) : null}
           onStartDrag={(corner) => {
             const anchorX = corner.includes('Xmin') ? it.maxX : it.minX
             const anchorZ = corner.includes('Zmin') ? it.maxZ : it.minZ
             dragRef.current = { itemId: it.id, anchorX, anchorZ }
+            if (controls) controls.enabled = false
           }}
         />
       ))}

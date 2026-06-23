@@ -8,10 +8,9 @@ const STATUS_HINT = {
   error:   "Couldn't read public/site-config.json — paste the JSON there to auto-load next time",
 }
 
-function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel }) {
+function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel, children }) {
   const [open, setOpen] = useState(false)
 
-  // Auto-expand when tool becomes active so the hint is visible.
   useEffect(() => { if (active) setOpen(true) }, [active])
 
   return (
@@ -34,6 +33,7 @@ function ToolSection({ num, title, hint, activatingLabel, active, onToggle, item
           <div className="tool-hint">
             {active ? <em>{activatingLabel}</em> : hint}
           </div>
+          {children}
           {items.length > 0 && (
             <ul className="item-list">
               {items.map((it, i) => (
@@ -73,7 +73,7 @@ function JsonSection({ config, loadStatus, onReload }) {
   return (
     <section className={`section${open ? ' sec-open' : ''}`}>
       <div className="section-head" onClick={() => setOpen((v) => !v)}>
-        <span className="sec-num">05</span>
+        <span className="sec-num">06</span>
         <span className="sec-title">Config JSON</span>
         <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
@@ -92,13 +92,15 @@ function JsonSection({ config, loadStatus, onReload }) {
 }
 
 export default function Panel({
-  gantries, arms, grids, zones,
+  gantries, arms, grids, zones, storageAreas,
+  gridSizeCm, onChangeGridSize,
   activeTool, setActiveTool,
   selectedId,
   onSelectGantry, onDeleteGantry,
   onSelectArm, onDeleteArm,
   onSelectGrid, onDeleteGrid,
   onSelectZone, onDeleteZone,
+  onSelectStorage, onDeleteStorage,
   showModel, onToggleModel,
   config, loadStatus, onReload,
 }) {
@@ -173,7 +175,7 @@ export default function Panel({
         <ToolSection
           num="03"
           title="Grids"
-          hint="Click two points on the floor to mark a grid area."
+          hint="Click two points on the floor to mark a robot navigation grid area."
           activatingLabel="Click two floor points…"
           active={activeTool === 'grid'}
           onToggle={() => toggleTool('grid')}
@@ -182,7 +184,24 @@ export default function Panel({
           onSelectItem={onSelectGrid}
           onDeleteItem={onDeleteGrid}
           renderLabel={(it, i) => `Grid ${i + 1}`}
-        />
+        >
+          <div className="settings-row inline">
+            <span className="setting-label">Grid unit</span>
+            <input
+              className="setting-input"
+              type="number"
+              min={10}
+              max={500}
+              step={10}
+              value={gridSizeCm}
+              onChange={(e) => {
+                const v = Math.max(10, Math.min(500, parseInt(e.target.value, 10) || 60))
+                onChangeGridSize(v)
+              }}
+            />
+            <span className="setting-unit">cm</span>
+          </div>
+        </ToolSection>
 
         <ToolSection
           num="04"
@@ -198,11 +217,25 @@ export default function Panel({
           renderLabel={(it, i) => `Zone ${i + 1}`}
         />
 
+        <ToolSection
+          num="05"
+          title="Storage areas"
+          hint="Mark areas filled with unit-sized boxes that gantry robots can fetch."
+          activatingLabel="Click two floor points…"
+          active={activeTool === 'storage'}
+          onToggle={() => toggleTool('storage')}
+          items={storageAreas}
+          selectedId={activeTool === 'storage' ? null : selectedId}
+          onSelectItem={onSelectStorage}
+          onDeleteItem={onDeleteStorage}
+          renderLabel={(it, i) => `Storage ${i + 1}`}
+        />
+
         <JsonSection config={config} loadStatus={loadStatus} onReload={onReload} />
       </div>
 
       <div className="colophon">
-        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones</span>
+        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage</span>
         <span className="kbd">⌘</span>
       </div>
     </aside>

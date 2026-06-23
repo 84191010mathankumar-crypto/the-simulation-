@@ -1,11 +1,3 @@
-/**
- * "Place a point on the floor" tool — used for robo arms, which (unlike
- * gantries/grids) just need a single mounting position, not an area.
- *
- * While active, clicking the floor drops a new marker. At any time, click
- * an existing marker to select it (and delete it from the panel), or drag
- * it to reposition.
- */
 import React, { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -47,6 +39,7 @@ export default function PointTool({
   onCreate, onSelect, onUpdate, onDeselect,
 }) {
   const { camera, gl } = useThree()
+  const controls = useThree((s) => s.controls)
   const dragRef = useRef(null)
 
   useEffect(() => {
@@ -55,13 +48,20 @@ export default function PointTool({
 
     function handleMove(e) {
       if (!dragRef.current) return
+      if (controls) controls.enabled = false
       const p = groundPointFromEvent(e, camera, dom)
       if (!p) return
       const x = Math.max(-half, Math.min(half, p[0]))
       const z = Math.max(-half, Math.min(half, p[1]))
       onUpdate(dragRef.current, { x, z })
     }
-    function handleUp() { dragRef.current = null }
+
+    function handleUp() {
+      if (dragRef.current) {
+        dragRef.current = null
+        if (controls) controls.enabled = true
+      }
+    }
 
     dom.addEventListener('pointermove', handleMove)
     dom.addEventListener('pointerup', handleUp)
@@ -69,7 +69,7 @@ export default function PointTool({
       dom.removeEventListener('pointermove', handleMove)
       dom.removeEventListener('pointerup', handleUp)
     }
-  }, [onUpdate, camera, gl, groundSize])
+  }, [onUpdate, camera, gl, groundSize, controls])
 
   function handleFloorDown(e) {
     if (!active) { onDeselect(); return }

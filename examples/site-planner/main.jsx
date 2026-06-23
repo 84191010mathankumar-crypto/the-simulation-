@@ -14,16 +14,18 @@ function bumpCounter(nextId, type, id) {
 }
 
 function App() {
-  const [gantries, setGantries] = useState([])
-  const [arms, setArms] = useState([])
-  const [grids, setGrids] = useState([])
-  const [zones, setZones] = useState([])   // restricted zones
-  const [activeTool, setActiveTool] = useState(null)
-  const [selectedId, setSelectedId] = useState(null)
-  const [loadStatus, setLoadStatus] = useState('loading')
-  const [showModel, setShowModel] = useState(true)
+  const [gantries, setGantries]       = useState([])
+  const [arms, setArms]               = useState([])
+  const [grids, setGrids]             = useState([])
+  const [zones, setZones]             = useState([])
+  const [storageAreas, setStorage]    = useState([])
+  const [gridSizeCm, setGridSizeCm]   = useState(60)
+  const [activeTool, setActiveTool]   = useState(null)
+  const [selectedId, setSelectedId]   = useState(null)
+  const [loadStatus, setLoadStatus]   = useState('loading')
+  const [showModel, setShowModel]     = useState(false)
 
-  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1 })
+  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
 
   const loadConfig = useCallback(() => {
@@ -32,18 +34,22 @@ function App() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data) { setLoadStatus('empty'); return }
-        const loadedGantries = data.gantryRobots    || []
-        const loadedArms     = data.roboArms         || []
-        const loadedGrids    = data.grids            || []
-        const loadedZones    = data.restrictedZones  || []
-        loadedGantries.forEach((it) => bumpCounter(nextId, 'gantry', it.id))
-        loadedArms.forEach((it)     => bumpCounter(nextId, 'arm',    it.id))
-        loadedGrids.forEach((it)    => bumpCounter(nextId, 'grid',   it.id))
-        loadedZones.forEach((it)    => bumpCounter(nextId, 'zone',   it.id))
-        setGantries(loadedGantries)
-        setArms(loadedArms)
-        setGrids(loadedGrids)
-        setZones(loadedZones)
+        const g = data.gantryRobots   || []
+        const a = data.roboArms       || []
+        const gr = data.grids         || []
+        const z = data.restrictedZones || []
+        const s = data.storageAreas   || []
+        g.forEach((it)  => bumpCounter(nextId, 'gantry',  it.id))
+        a.forEach((it)  => bumpCounter(nextId, 'arm',     it.id))
+        gr.forEach((it) => bumpCounter(nextId, 'grid',    it.id))
+        z.forEach((it)  => bumpCounter(nextId, 'zone',    it.id))
+        s.forEach((it)  => bumpCounter(nextId, 'storage', it.id))
+        setGantries(g)
+        setArms(a)
+        setGrids(gr)
+        setZones(z)
+        setStorage(s)
+        if (data.gridSizeCm) setGridSizeCm(data.gridSizeCm)
         setLoadStatus('loaded')
       })
       .catch(() => setLoadStatus('error'))
@@ -103,6 +109,19 @@ function App() {
     setSelectedId((cur) => (cur === id ? null : cur))
   }
 
+  // ── Storage areas ──────────────────────────────────────────────
+  const onCreateStorage = (rect) => {
+    setStorage((s) => [...s, { id: makeId('storage'), ...rect }])
+    setActiveTool(null)
+  }
+  const onUpdateStorage = (id, rect) =>
+    setStorage((s) => s.map((it) => (it.id === id ? { ...it, ...rect } : it)))
+  const onSelectStorage = (id) => setSelectedId((cur) => (cur === id ? null : id))
+  const onDeleteStorage = (id) => {
+    setStorage((s) => s.filter((it) => it.id !== id))
+    setSelectedId((cur) => (cur === id ? null : cur))
+  }
+
   const onDeselect = () => setSelectedId(null)
 
   // Arm is valid when it lies inside at least one grid AND outside all restricted zones.
@@ -117,6 +136,7 @@ function App() {
   }, [grids, zones])
 
   const config = useMemo(() => ({
+    gridSizeCm,
     gantryRobots: gantries.map(({ id, minX, maxX, minZ, maxZ }) => ({
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
@@ -127,31 +147,38 @@ function App() {
     restrictedZones: zones.map(({ id, minX, maxX, minZ, maxZ }) => ({
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
-  }), [gantries, arms, grids, zones])
+    storageAreas: storageAreas.map(({ id, minX, maxX, minZ, maxZ }) => ({
+      id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
+    })),
+  }), [gridSizeCm, gantries, arms, grids, zones, storageAreas])
 
   return (
     <div className="planner-app">
       <Panel
-        gantries={gantries} arms={arms} grids={grids} zones={zones}
+        gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
+        gridSizeCm={gridSizeCm} onChangeGridSize={setGridSizeCm}
         activeTool={activeTool} setActiveTool={setActiveTool}
         selectedId={selectedId}
         onSelectGantry={onSelectGantry} onDeleteGantry={onDeleteGantry}
         onSelectArm={onSelectArm} onDeleteArm={onDeleteArm}
         onSelectGrid={onSelectGrid} onDeleteGrid={onDeleteGrid}
         onSelectZone={onSelectZone} onDeleteZone={onDeleteZone}
+        onSelectStorage={onSelectStorage} onDeleteStorage={onDeleteStorage}
         showModel={showModel} onToggleModel={() => setShowModel((v) => !v)}
         config={config} loadStatus={loadStatus} onReload={loadConfig}
       />
       <SitePlannerScene
         showModel={showModel}
         activeTool={activeTool}
-        gantries={gantries} arms={arms} grids={grids} zones={zones}
+        gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         selectedId={selectedId}
+        gridSizeCm={gridSizeCm}
         isArmValid={isArmValid}
-        onCreateGantry={onCreateGantry} onSelectGantry={onSelectGantry} onUpdateGantry={onUpdateGantry}
+        onCreateGantry={onCreateGantry} onSelectGantry={onSelectGantry} onUpdateGantry={onUpdateGantry} onDeleteGantry={onDeleteGantry}
         onCreateArm={onCreateArm} onSelectArm={onSelectArm} onUpdateArm={onUpdateArm}
-        onCreateGrid={onCreateGrid} onSelectGrid={onSelectGrid} onUpdateGrid={onUpdateGrid}
-        onCreateZone={onCreateZone} onSelectZone={onSelectZone} onUpdateZone={onUpdateZone}
+        onCreateGrid={onCreateGrid} onSelectGrid={onSelectGrid} onUpdateGrid={onUpdateGrid} onDeleteGrid={onDeleteGrid}
+        onCreateZone={onCreateZone} onSelectZone={onSelectZone} onUpdateZone={onUpdateZone} onDeleteZone={onDeleteZone}
+        onCreateStorage={onCreateStorage} onSelectStorage={onSelectStorage} onUpdateStorage={onUpdateStorage} onDeleteStorage={onDeleteStorage}
         onDeselect={onDeselect}
       />
     </div>

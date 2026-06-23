@@ -234,6 +234,42 @@
   flex-shrink: 0;
 }
 
+/* ── Settings row (used inline inside section-body) ──────────── */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.settings-row.inline {
+  /* no extra margin when adjacent to the hint */
+}
+.setting-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-4);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex: 1;
+}
+.setting-input {
+  width: 52px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-2);
+  text-align: right;
+}
+.setting-input:focus { outline: none; border-color: var(--accent); }
+.setting-unit {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-4);
+}
+
 /* ── JSON panel section ─────────────────────────────────────── */
 .json-section-head {
   cursor: pointer;

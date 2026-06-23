@@ -1,10 +1,10 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, Grid, GizmoHelper, GizmoViewport, useGLTF, Html } from '@react-three/drei'
+import { OrbitControls, GizmoHelper, GizmoViewport, useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import RectTool from './RectTool'
 import PointTool from './PointTool'
-import { GantryRobotVisual } from './RobotVisuals'
+import { GantryRobotVisual, GridAreaVisual, StorageVisual } from './RobotVisuals'
 
 function CameraFit({ bounds }) {
   const { camera } = useThree()
@@ -55,13 +55,13 @@ function Loading() {
 }
 
 export default function SitePlannerScene({
-  activeTool, gantries, arms, grids, zones, selectedId,
-  showModel = true,
-  isArmValid,
-  onCreateGantry, onSelectGantry, onUpdateGantry,
+  activeTool, gantries, arms, grids, zones, storageAreas,
+  selectedId, showModel = true, gridSizeCm = 100, isArmValid,
+  onCreateGantry, onSelectGantry, onUpdateGantry, onDeleteGantry,
   onCreateArm, onSelectArm, onUpdateArm,
-  onCreateGrid, onSelectGrid, onUpdateGrid,
-  onCreateZone, onSelectZone, onUpdateZone,
+  onCreateGrid, onSelectGrid, onUpdateGrid, onDeleteGrid,
+  onCreateZone, onSelectZone, onUpdateZone, onDeleteZone,
+  onCreateStorage, onSelectStorage, onUpdateStorage, onDeleteStorage,
   onDeselect,
 }) {
   const [bounds, setBounds] = useState(null)
@@ -99,27 +99,12 @@ export default function SitePlannerScene({
         </Suspense>
         <CameraFit bounds={bounds} />
 
-        <Grid
-          args={[groundSize, groundSize]}
-          cellSize={1}
-          cellThickness={0.6}
-          cellColor="#a0aab3"
-          sectionSize={5}
-          sectionThickness={1.1}
-          sectionColor="#7b8693"
-          fadeDistance={groundSize}
-          fadeStrength={1.6}
-          followCamera={false}
-          infiniteGrid={false}
-          position={[0, 0.002, 0]}
-        />
-
         <Suspense fallback={null}>
-          {/* Gantry operating areas — orange overlay + procedural gantry bridge visual */}
+          {/* Gantry operating areas — orange overlay + gantry bridge visual */}
           <RectTool
             active={activeTool === 'gantry'}
             items={gantries}
-            selectedId={activeTool === 'gantry' ? selectedId : null}
+            selectedId={activeTool === 'gantry' ? null : selectedId}
             color="#ff6000"
             y={0.10}
             groundSize={groundSize}
@@ -127,28 +112,31 @@ export default function SitePlannerScene({
             onCreate={onCreateGantry}
             onSelect={onSelectGantry}
             onUpdate={onUpdateGantry}
+            onDelete={onDeleteGantry}
             onDeselect={onDeselect}
           />
 
-          {/* Grid areas — blue overlay */}
+          {/* Grid areas — blue overlay with unit-grid lines */}
           <RectTool
             active={activeTool === 'grid'}
             items={grids}
-            selectedId={activeTool === 'grid' ? selectedId : null}
+            selectedId={activeTool === 'grid' ? null : selectedId}
             color="#1d4ed8"
             y={0.05}
             groundSize={groundSize}
+            renderRobot={(rect) => <GridAreaVisual rect={rect} gridSizeCm={gridSizeCm} />}
             onCreate={onCreateGrid}
             onSelect={onSelectGrid}
             onUpdate={onUpdateGrid}
+            onDelete={onDeleteGrid}
             onDeselect={onDeselect}
           />
 
-          {/* Restricted zones — red overlay, drawn below other layers */}
+          {/* Restricted zones — red overlay */}
           <RectTool
             active={activeTool === 'zone'}
             items={zones}
-            selectedId={activeTool === 'zone' ? selectedId : null}
+            selectedId={activeTool === 'zone' ? null : selectedId}
             color="#dc2626"
             opacity={0.28}
             y={0.03}
@@ -156,6 +144,24 @@ export default function SitePlannerScene({
             onCreate={onCreateZone}
             onSelect={onSelectZone}
             onUpdate={onUpdateZone}
+            onDelete={onDeleteZone}
+            onDeselect={onDeselect}
+          />
+
+          {/* Storage areas — brown overlay + box fill */}
+          <RectTool
+            active={activeTool === 'storage'}
+            items={storageAreas}
+            selectedId={activeTool === 'storage' ? null : selectedId}
+            color="#92400e"
+            opacity={0.22}
+            y={0.04}
+            groundSize={groundSize}
+            renderRobot={(rect) => <StorageVisual rect={rect} gridSizeCm={gridSizeCm} />}
+            onCreate={onCreateStorage}
+            onSelect={onSelectStorage}
+            onUpdate={onUpdateStorage}
+            onDelete={onDeleteStorage}
             onDeselect={onDeselect}
           />
 
@@ -163,7 +169,7 @@ export default function SitePlannerScene({
           <PointTool
             active={activeTool === 'arm'}
             items={arms}
-            selectedId={activeTool === 'arm' ? selectedId : null}
+            selectedId={activeTool === 'arm' ? null : selectedId}
             isValid={isArmValid}
             groundSize={groundSize}
             onCreate={onCreateArm}
