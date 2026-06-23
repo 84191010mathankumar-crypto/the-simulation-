@@ -70,22 +70,57 @@
 
 .planner-panel .panel-scroll { flex: 1; overflow-y: auto; }
 
-.planner-panel .section {
-  padding: 11px 16px 10px;
+/* ── View options row ─────────────────────────────────────── */
+.view-row {
+  padding: 8px 16px;
   border-bottom: 1px solid var(--rule-soft);
-  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.view-toggle:hover { border-color: var(--ink-3); color: var(--ink-2); }
+.view-toggle.view-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.view-icon { font-size: 10px; }
+
+/* ── Collapsible sections ─────────────────────────────────── */
+.planner-panel .section {
+  border-bottom: 1px solid var(--rule-soft);
 }
 .planner-panel .section-head {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.planner-panel .section-body {
+  padding: 0 16px 10px;
 }
 .planner-panel .sec-num {
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--ink-4);
   letter-spacing: 0.08em;
+  flex-shrink: 0;
 }
 .planner-panel .sec-title {
   font-family: var(--font-display);
@@ -94,8 +129,48 @@
   font-style: italic;
   color: var(--ink);
   letter-spacing: -0.015em;
+  flex: 1;
 }
 .planner-panel .sec-title::before { content: '— '; color: var(--ink-4); font-style: normal; }
+.planner-panel .sec-count {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-4);
+  background: var(--paper-deep);
+  border-radius: 3px;
+  padding: 1px 5px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.planner-panel .sec-add {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+.planner-panel .sec-add:hover { border-color: var(--ink-3); color: var(--ink); }
+.planner-panel .sec-add.active-tool {
+  border-color: #f59e0b;
+  color: #b45309;
+  background: color-mix(in srgb, #f59e0b 12%, var(--surface));
+}
+.planner-panel .sec-chevron {
+  font-size: 8px;
+  color: var(--ink-4);
+  flex-shrink: 0;
+  line-height: 1;
+}
 
 .tool-hint {
   font-family: var(--font);
@@ -104,6 +179,7 @@
   line-height: 1.4;
   margin-bottom: 8px;
 }
+.tool-hint em { font-style: normal; color: #b45309; }
 
 .active-tool {
   border-color: #f59e0b;

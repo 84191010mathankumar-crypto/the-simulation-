@@ -21,6 +21,7 @@ function App() {
   const [activeTool, setActiveTool] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [loadStatus, setLoadStatus] = useState('loading')
+  const [showModel, setShowModel] = useState(true)
 
   const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
@@ -138,9 +139,11 @@ function App() {
         onSelectArm={onSelectArm} onDeleteArm={onDeleteArm}
         onSelectGrid={onSelectGrid} onDeleteGrid={onDeleteGrid}
         onSelectZone={onSelectZone} onDeleteZone={onDeleteZone}
+        showModel={showModel} onToggleModel={() => setShowModel((v) => !v)}
         config={config} loadStatus={loadStatus} onReload={loadConfig}
       />
       <SitePlannerScene
+        showModel={showModel}
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones}
         selectedId={selectedId}

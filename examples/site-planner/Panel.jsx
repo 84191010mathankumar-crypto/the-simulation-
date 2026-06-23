@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Nav from '../../src/components/Nav'
 
 const STATUS_HINT = {
@@ -8,39 +8,51 @@ const STATUS_HINT = {
   error:   "Couldn't read public/site-config.json — paste the JSON there to auto-load next time",
 }
 
-function ToolSection({ num, title, hint, activeLabel, idleLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel }) {
+function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel }) {
+  const [open, setOpen] = useState(false)
+
+  // Auto-expand when tool becomes active so the hint is visible.
+  useEffect(() => { if (active) setOpen(true) }, [active])
+
   return (
-    <section className="section">
-      <div className="section-head">
+    <section className={`section${open ? ' sec-open' : ''}`}>
+      <div className="section-head" onClick={() => setOpen((v) => !v)}>
         <span className="sec-num">{num}</span>
         <span className="sec-title">{title}</span>
-      </div>
-      <div className="tool-hint">{hint}</div>
-      <div className="btn-row">
+        {!open && items.length > 0 && <span className="sec-count">{items.length}</span>}
         <button
-          className={`btn-secondary ${active ? 'active-tool' : ''}`}
-          onClick={onToggle}
+          className={`sec-add${active ? ' active-tool' : ''}`}
+          title={active ? activatingLabel : 'Add'}
+          onClick={(e) => { e.stopPropagation(); onToggle() }}
         >
-          {active ? activeLabel : idleLabel}
+          {active ? '×' : '+'}
         </button>
+        <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
-      {items.length > 0 && (
-        <ul className="item-list">
-          {items.map((it, i) => (
-            <li
-              key={it.id}
-              className={it.id === selectedId ? 'active' : ''}
-              onClick={() => onSelectItem(it.id)}
-            >
-              <span>{renderLabel(it, i)}</span>
-              <button
-                className="item-del"
-                aria-label="Delete"
-                onClick={(e) => { e.stopPropagation(); onDeleteItem(it.id) }}
-              >×</button>
-            </li>
-          ))}
-        </ul>
+      {open && (
+        <div className="section-body">
+          <div className="tool-hint">
+            {active ? <em>{activatingLabel}</em> : hint}
+          </div>
+          {items.length > 0 && (
+            <ul className="item-list">
+              {items.map((it, i) => (
+                <li
+                  key={it.id}
+                  className={it.id === selectedId ? 'active' : ''}
+                  onClick={() => onSelectItem(it.id)}
+                >
+                  <span>{renderLabel(it, i)}</span>
+                  <button
+                    className="item-del"
+                    aria-label="Delete"
+                    onClick={(e) => { e.stopPropagation(); onDeleteItem(it.id) }}
+                  >×</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </section>
   )
@@ -59,21 +71,21 @@ function JsonSection({ config, loadStatus, onReload }) {
   }
 
   return (
-    <section className="section json-section">
-      <div className="section-head json-section-head" onClick={() => setOpen((v) => !v)}>
+    <section className={`section${open ? ' sec-open' : ''}`}>
+      <div className="section-head" onClick={() => setOpen((v) => !v)}>
         <span className="sec-num">05</span>
         <span className="sec-title">Config JSON</span>
-        <span className="json-toggle">{open ? '−' : '+'}</span>
+        <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
       {open && (
-        <>
+        <div className="section-body">
           <div className="json-hint">{STATUS_HINT[loadStatus] || STATUS_HINT.empty}</div>
           <div className="json-actions">
             <button className="btn-secondary" onClick={onReload}>Reload</button>
             <button className="btn-secondary" onClick={handleCopy}>{copied ? 'Copied!' : 'Copy'}</button>
           </div>
           <textarea className="json-text" readOnly value={json} spellCheck={false} />
-        </>
+        </div>
       )}
     </section>
   )
@@ -87,6 +99,7 @@ export default function Panel({
   onSelectArm, onDeleteArm,
   onSelectGrid, onDeleteGrid,
   onSelectZone, onDeleteZone,
+  showModel, onToggleModel,
   config, loadStatus, onReload,
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -118,12 +131,22 @@ export default function Panel({
       </div>
 
       <div className="panel-scroll">
+        {/* View options */}
+        <div className="view-row">
+          <button
+            className={`view-toggle${showModel ? ' view-on' : ''}`}
+            onClick={onToggleModel}
+          >
+            <span className="view-icon">{showModel ? '◉' : '○'}</span>
+            Site model
+          </button>
+        </div>
+
         <ToolSection
           num="01"
           title="Gantry robots"
           hint="Click two points on the floor to mark a gantry's operating area."
-          activeLabel="Click two floor points…"
-          idleLabel="+ Draw gantry area"
+          activatingLabel="Click two floor points…"
           active={activeTool === 'gantry'}
           onToggle={() => toggleTool('gantry')}
           items={gantries}
@@ -137,8 +160,7 @@ export default function Panel({
           num="02"
           title="Robo arms"
           hint="Click a point on the floor to place a robo arm base. Ring is green when on-grid and outside restricted zones."
-          activeLabel="Click floor to place…"
-          idleLabel="+ Place robo arm"
+          activatingLabel="Click floor to place…"
           active={activeTool === 'arm'}
           onToggle={() => toggleTool('arm')}
           items={arms}
@@ -152,8 +174,7 @@ export default function Panel({
           num="03"
           title="Grids"
           hint="Click two points on the floor to mark a grid area."
-          activeLabel="Click two floor points…"
-          idleLabel="+ Draw grid"
+          activatingLabel="Click two floor points…"
           active={activeTool === 'grid'}
           onToggle={() => toggleTool('grid')}
           items={grids}
@@ -167,8 +188,7 @@ export default function Panel({
           num="04"
           title="Restricted zones"
           hint="Mark areas where arm placement is forbidden. Arms inside a zone show a red ring."
-          activeLabel="Click two floor points…"
-          idleLabel="+ Draw restricted zone"
+          activatingLabel="Click two floor points…"
           active={activeTool === 'zone'}
           onToggle={() => toggleTool('zone')}
           items={zones}

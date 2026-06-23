@@ -25,7 +25,7 @@ function CameraFit({ bounds }) {
   return null
 }
 
-function SiteModel({ onBoundsReady }) {
+function SiteModel({ onBoundsReady, visible }) {
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}model/model.gltf`)
 
   useEffect(() => {
@@ -37,7 +37,7 @@ function SiteModel({ onBoundsReady }) {
     onBoundsReady({ size, center })
   }, [scene, onBoundsReady])
 
-  return <primitive object={scene} />
+  return <primitive object={scene} visible={visible} />
 }
 
 function Loading() {
@@ -56,6 +56,7 @@ function Loading() {
 
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, selectedId,
+  showModel = true,
   isArmValid,
   onCreateGantry, onSelectGantry, onUpdateGantry,
   onCreateArm, onSelectArm, onUpdateArm,
@@ -94,7 +95,7 @@ export default function SitePlannerScene({
         <directionalLight position={[30, 40, 20]} intensity={1.3} />
 
         <Suspense fallback={<Loading />}>
-          <SiteModel onBoundsReady={setBounds} />
+          <SiteModel onBoundsReady={setBounds} visible={showModel} />
         </Suspense>
         <CameraFit bounds={bounds} />
 
