@@ -100,7 +100,7 @@ export default function SitePlannerScene({
         <CameraFit bounds={bounds} />
 
         <Suspense fallback={null}>
-          {/* Gantry operating areas — orange overlay + gantry bridge visual */}
+          {/* Gantry operating areas — orange outline, no fill + gantry bridge visual */}
           <RectTool
             active={activeTool === 'gantry'}
             items={gantries}
@@ -109,6 +109,7 @@ export default function SitePlannerScene({
             y={0.10}
             groundSize={groundSize}
             selectable={!activeTool}
+            outlineOnly
             renderRobot={(rect) => <GantryRobotVisual rect={rect} />}
             onCreate={onCreateGantry}
             onSelect={onSelectGantry}
@@ -117,15 +118,16 @@ export default function SitePlannerScene({
             onDeselect={onDeselect}
           />
 
-          {/* Grid areas — blue overlay with unit-grid lines */}
+          {/* Grid areas — dark grey outline, very transparent black bg with unit-grid lines */}
           <RectTool
             active={activeTool === 'grid'}
             items={grids}
             selectedId={activeTool === 'grid' ? null : selectedId}
-            color="#1d4ed8"
+            color="#3b3f44"
             y={0.05}
             groundSize={groundSize}
             selectable={!activeTool}
+            outlineOnly
             renderRobot={(rect) => <GridAreaVisual rect={rect} gridSizeCm={gridSizeCm} />}
             onCreate={onCreateGrid}
             onSelect={onSelectGrid}
@@ -151,7 +153,7 @@ export default function SitePlannerScene({
             onDeselect={onDeselect}
           />
 
-          {/* Storage areas — brown overlay + box fill */}
+          {/* Storage areas — brown outline, no fill + box fill */}
           <RectTool
             active={activeTool === 'storage'}
             items={storageAreas}
@@ -161,6 +163,7 @@ export default function SitePlannerScene({
             y={0.04}
             groundSize={groundSize}
             selectable={!activeTool}
+            outlineOnly
             renderRobot={(rect) => <StorageVisual rect={rect} gridSizeCm={gridSizeCm} />}
             onCreate={onCreateStorage}
             onSelect={onSelectStorage}

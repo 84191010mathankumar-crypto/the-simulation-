@@ -54,27 +54,91 @@ function cornerPos(corner, rect, y) {
   return [x, y, z]
 }
 
-function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelect, onDelete, onStartDrag }) {
+function Rect({ rect, selected, preview, color, y, opacity, outlineOnly, renderRobot, onSelect, onDelete, onStartDrag }) {
+  const [hovered, setHovered] = useState(false)
   const w = Math.max(0.05, rect.maxX - rect.minX)
   const d = Math.max(0.05, rect.maxZ - rect.minZ)
   const cx = (rect.minX + rect.maxX) / 2
   const cz = (rect.minZ + rect.maxZ) / 2
 
+  // When outlineOnly, show a transparent fill on hover/selected so the user
+  // gets feedback that they're interacting with this area.  The fill mesh has
+  // NO pointer handler — clicks pass through to the floor / outline bars.
+  const showFill = outlineOnly && (hovered || selected) && !preview
+
+  // Outline hit-target — a thin flat ring around the perimeter.  When
+  // outlineOnly is set, the interior is NOT clickable so the user can
+  // orbit/pan and draw new items over existing ones without selecting them.
+  // We build it from four thin boxes; each one is a pointer target.
+  const barW = 0.05
+  const hitW = 0.25
+  const bars = outlineOnly ? [
+    { p: [cx, y, rect.minZ], s: [w, 0.05, barW] },
+    { p: [cx, y, rect.maxZ], s: [w, 0.05, barW] },
+    { p: [rect.minX, y, cz], s: [barW, 0.05, d] },
+    { p: [rect.maxX, y, cz], s: [barW, 0.05, d] },
+  ] : null
+
+  const onBarEnter = onSelect ? () => setHovered(true) : null
+  const onBarLeave = onSelect ? () => setHovered(false) : null
+
   return (
     <group>
-      <mesh
-        position={[cx, y, cz]}
-        onPointerDown={clickSelect(onSelect)}
-      >
-        <boxGeometry args={[w, 0.05, d]} />
-        <meshStandardMaterial
-          color={color}
-          transparent
-          opacity={preview ? 0.25 : selected ? Math.min(1, opacity * 1.7) : opacity}
-          depthWrite={false}
-        />
-        <Edges color={color} />
-      </mesh>
+      {outlineOnly && showFill && (
+        <mesh position={[cx, y - 0.02, cz]}>
+          <boxGeometry args={[w, 0.02, d]} />
+          <meshStandardMaterial
+            color={color}
+            transparent
+            opacity={selected ? 0.22 : 0.14}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+      {outlineOnly ? (
+        <>
+          {bars.map((b, i) => (
+            <group key={i}>
+              {/* Visible thin bar. */}
+              <mesh position={b.p}>
+                <boxGeometry args={b.s} />
+                <meshStandardMaterial
+                  color={color}
+                  transparent
+                  opacity={preview ? 0.7 : selected ? 1 : hovered ? 0.95 : 0.85}
+                  depthWrite={false}
+                />
+              </mesh>
+              {/* Larger invisible hit-target for easy clicking. */}
+              <mesh
+                position={b.p}
+                onPointerDown={clickSelect(onSelect)}
+                onPointerEnter={onBarEnter}
+                onPointerLeave={onBarLeave}
+              >
+                <boxGeometry args={[Math.max(b.s[0], hitW), 0.05, Math.max(b.s[2], hitW)]} />
+                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+              </mesh>
+            </group>
+          ))}
+        </>
+      ) : (
+        <mesh
+          position={[cx, y, cz]}
+          onPointerDown={clickSelect(onSelect)}
+          onPointerEnter={onBarEnter}
+          onPointerLeave={onBarLeave}
+        >
+          <boxGeometry args={[w, 0.05, d]} />
+          <meshStandardMaterial
+            color={color}
+            transparent
+            opacity={preview ? 0.25 : selected ? Math.min(1, opacity * 1.7) : hovered ? Math.min(1, opacity * 1.4) : opacity}
+            depthWrite={false}
+          />
+          <Edges color={color} />
+        </mesh>
+      )}
       {renderRobot && !preview && renderRobot(rect)}
       {selected && !preview && CORNERS.map((c) => (
           <mesh
@@ -112,7 +176,7 @@ function Rect({ rect, selected, preview, color, y, opacity, renderRobot, onSelec
 }
 
 export default function RectTool({
-  active, items = [], selectedId, color = '#dc2626', y = 0.12, opacity = 0.22, groundSize,
+  active, items = [], selectedId, color = '#dc2626', y = 0.12, opacity = 0.22, outlineOnly = false, groundSize,
   selectable = true,
   renderRobot, onCreate, onSelect, onUpdate, onDelete, onDeselect,
 }) {
@@ -190,6 +254,7 @@ export default function RectTool({
           color={color}
           y={y}
           opacity={opacity}
+          outlineOnly={outlineOnly}
           renderRobot={renderRobot}
           selected={it.id === selectedId}
           onSelect={selectable ? () => onSelect(it.id) : null}
@@ -209,6 +274,7 @@ export default function RectTool({
           color={color}
           y={y}
           opacity={opacity}
+          outlineOnly={outlineOnly}
           preview
         />
       )}

@@ -91,9 +91,16 @@ export function GridAreaVisual({ rect, gridSizeCm = 100 }) {
   }, [rect.minX, rect.maxX, rect.minZ, rect.maxZ, gridSizeCm])
 
   return (
-    <lineSegments geometry={geom}>
-      <lineBasicMaterial color="#3b82f6" opacity={0.55} transparent />
-    </lineSegments>
+    <group>
+      {/* Very transparent black background. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(rect.minX + rect.maxX) / 2, 0.055, (rect.minZ + rect.maxZ) / 2]}>
+        <planeGeometry args={[rect.maxX - rect.minX, rect.maxZ - rect.minZ]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.02} depthWrite={false} />
+      </mesh>
+      <lineSegments geometry={geom}>
+        <lineBasicMaterial color="#3b3f44" opacity={0.3} transparent />
+      </lineSegments>
+    </group>
   )
 }
 
