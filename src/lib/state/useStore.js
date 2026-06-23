@@ -107,9 +107,9 @@ export function createRobotStore() {
     // segment — usually just [from, to], or [from, detour-corner, to] when
     // the direct line would cross a restricted zone (see `zones` below).
     platformPath: null,
-    // When true, the AGV travels in axis-aligned (X-then-Z) legs instead of a
-    // straight diagonal line, so it visually follows the floor grid.
-    gridMovement: false,
+    // When true (the default), the AGV's path is snapped onto the floor's
+    // grid lines instead of travelling in a straight diagonal line.
+    gridMovement: true,
     // User-drawn no-go rectangles ({ id, minX, maxX, minZ, maxZ }) the AGV
     // routes around instead of driving through.
     zones: [],

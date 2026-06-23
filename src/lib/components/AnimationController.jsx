@@ -141,39 +141,56 @@ function lerpRotation(a, b, t) {
   ]
 }
 
-function legLength(a, b, gridMovement) {
-  const dx = b[0] - a[0], dz = b[2] - a[2]
-  return gridMovement ? Math.abs(dx) + Math.abs(dz) : Math.hypot(dx, dz)
+function legLength(a, b) {
+  return Math.hypot(b[0] - a[0], b[2] - a[2])
 }
 
-/* Position at fraction `u` (0..1) along one leg.  When gridMovement is on,
- * the leg itself bends into two axis-aligned segments (X then Z) instead of
- * a diagonal — same trick as the old lerpPoseGrid, just per-leg now. */
-function legPosition(a, b, u, gridMovement) {
+function legPosition(a, b, u) {
   const y = a[1] + (b[1] - a[1]) * u
-  if (!gridMovement) {
-    return [a[0] + (b[0] - a[0]) * u, y, a[2] + (b[2] - a[2]) * u]
-  }
-  const dx = b[0] - a[0], dz = b[2] - a[2]
-  const legX = Math.abs(dx), legZ = Math.abs(dz)
-  const total = legX + legZ
-  let x = a[0], z = a[2]
-  if (total > 1e-6) {
-    const along = u * total
-    if (along <= legX) { x = a[0] + Math.sign(dx) * along; z = a[2] }
-    else { x = b[0]; z = a[2] + Math.sign(dz) * (along - legX) }
-  }
-  return [x, y, z]
+  return [a[0] + (b[0] - a[0]) * u, y, a[2] + (b[2] - a[2]) * u]
 }
 
-/* Walks a multi-waypoint path (as built by buildAvoidancePath) to the world
- * position/rotation at overall progress `t`. */
-function poseAlongPath(path, rotA, rotB, t, gridMovement) {
+// Must match the floor <Grid cellSize> in WarehouseScene so a "grid line"
+// here is the same line the player sees drawn on the floor.
+const GRID_CELL = 1
+
+function snapToGrid(v) {
+  return Math.round(v / GRID_CELL) * GRID_CELL
+}
+
+/* Expands a raw path (e.g. from buildAvoidancePath) into one that actually
+ * rides along the floor's grid lines instead of just being axis-aligned at
+ * arbitrary coordinates.  Each leg a→b becomes: a → nearest grid
+ * intersection to a → the intersection that shares b's grid X (still a real
+ * intersection, since both coordinates are snapped) → nearest grid
+ * intersection to b → b.  The first/last hops off the grid are unavoidable
+ * since the AGV parks wherever the target object actually is. */
+function gridSnapPath(waypoints) {
+  const out = [waypoints[0]]
+  const push = (p) => {
+    const prev = out[out.length - 1]
+    if (Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 1e-4) out.push(p)
+  }
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const a = waypoints[i], b = waypoints[i + 1]
+    const y = a[1]
+    const aSnap = [snapToGrid(a[0]), y, snapToGrid(a[2])]
+    const bSnap = [snapToGrid(b[0]), y, snapToGrid(b[2])]
+    const bend  = [bSnap[0], y, aSnap[2]]
+    push(aSnap); push(bend); push(bSnap); push(b)
+  }
+  return out
+}
+
+/* Walks a multi-waypoint path (as built by buildAvoidancePath, optionally
+ * grid-snapped by gridSnapPath) to the world position/rotation at overall
+ * progress `t`. */
+function poseAlongPath(path, rotA, rotB, t) {
   const rotation = lerpRotation(rotA, rotB, t)
   if (path.length < 2) return { position: [...path[0]], rotation }
 
   const legLens = []
-  for (let i = 0; i < path.length - 1; i++) legLens.push(legLength(path[i], path[i + 1], gridMovement))
+  for (let i = 0; i < path.length - 1; i++) legLens.push(legLength(path[i], path[i + 1]))
   const total = legLens.reduce((a, b) => a + b, 0)
   if (total < 1e-6) return { position: [...path[path.length - 1]], rotation }
 
@@ -182,7 +199,7 @@ function poseAlongPath(path, rotA, rotB, t, gridMovement) {
     const len = legLens[i]
     if (remaining <= len || i === legLens.length - 1) {
       const u = len > 1e-6 ? Math.min(1, remaining / len) : 1
-      return { position: legPosition(path[i], path[i + 1], u, gridMovement), rotation }
+      return { position: legPosition(path[i], path[i + 1], u), rotation }
     }
     remaining -= len
   }
@@ -208,7 +225,7 @@ export default function AnimationController() {
     const {
       animState, robotRef, fromAngles, toAngles, fromPlatform, toPlatform,
       followTarget, startObject, endObject, mobileMode,
-      platformPose, parkingRef, gridMovement, platformPath,
+      platformPose, parkingRef, platformPath,
     } = store
 
     // ── Follow mode: live IK as the user drags the target ──────────────────
@@ -262,10 +279,11 @@ export default function AnimationController() {
       } else if (animState === 'returning') {
         const homeAngles = clampAllJoints({ ...HOME_ANGLES })
         const homePlatform = { ...store.homePlatform }
+        const rawPath = buildAvoidancePath(currentPlatform.position, homePlatform.position, store.zones)
         useStore.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
           fromPlatform: currentPlatform, toPlatform: homePlatform,
-          platformPath: buildAvoidancePath(currentPlatform.position, homePlatform.position, store.zones),
+          platformPath: store.gridMovement ? gridSnapPath(rawPath) : rawPath,
         })
         store.addLog('info', 'Returning to HOME…')
       } else {
@@ -294,7 +312,7 @@ export default function AnimationController() {
       const path = platformPath && platformPath.length >= 2
         ? platformPath
         : [fromPlatform.position, toPlatform.position]
-      const ip = poseAlongPath(path, fromPlatform.rotation, toPlatform.rotation, t, gridMovement)
+      const ip = poseAlongPath(path, fromPlatform.rotation, toPlatform.rotation, t)
       useStore.setState({ platformPose: ip })
     }
 
@@ -344,10 +362,11 @@ function _solveSegment(useStore, store, target, currentAngles, currentPlatform) 
     const clamped = clampAllJoints(solved)
     applyAnglesToRobot(robotRef, currentAngles)
     addLog('ok', `IK converged for ${target.toUpperCase()}`, _logAngles(clamped))
+    const rawPath = buildAvoidancePath(currentPlatform.position, targetPlatform.position, store.zones)
     useStore.setState({
       fromAngles: currentAngles, toAngles: clamped,
       fromPlatform: currentPlatform, toPlatform: targetPlatform,
-      platformPath: buildAvoidancePath(currentPlatform.position, targetPlatform.position, store.zones),
+      platformPath: store.gridMovement ? gridSnapPath(rawPath) : rawPath,
     })
   } else {
     addLog('warn', `IK did not converge for ${target} — target may be out of reach`)

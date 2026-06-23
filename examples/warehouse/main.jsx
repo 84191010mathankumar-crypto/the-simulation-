@@ -46,7 +46,7 @@ function App() {
   const [logs, setLogs] = useState([])
   const [loadedCount, setLoadedCount] = useState(0)
   const [customCode, setCustomCode] = useState(DEFAULT_CUSTOM_CODE)
-  const [gridMovement, setGridMovement] = useState(false)
+  const [gridMovement, setGridMovement] = useState(true)
   const [showPaths, setShowPaths] = useState(false)
   const [pathResetKey, setPathResetKey] = useState(0)
 
