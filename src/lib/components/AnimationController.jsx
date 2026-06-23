@@ -72,6 +72,40 @@ function lerpPose(a, b, t) {
   }
 }
 
+/* Same as lerpPose, but the platform travels in two axis-aligned legs
+ * (first along X, then along Z) instead of a straight diagonal — so it
+ * always rides along the floor grid's lines. */
+function lerpPoseGrid(a, b, t) {
+  const [ax, ay, az] = a.position
+  const [bx, by, bz] = b.position
+  const dx = bx - ax
+  const dz = bz - az
+  const legX = Math.abs(dx)
+  const legZ = Math.abs(dz)
+  const total = legX + legZ
+
+  let x = ax, z = az
+  if (total > 1e-6) {
+    const along = t * total
+    if (along <= legX) {
+      x = ax + Math.sign(dx) * along
+      z = az
+    } else {
+      x = bx
+      z = az + Math.sign(dz) * (along - legX)
+    }
+  }
+
+  return {
+    position: [x, ay + (by - ay) * t, z],
+    rotation: [
+      a.rotation[0] + (b.rotation[0] - a.rotation[0]) * t,
+      a.rotation[1] + (b.rotation[1] - a.rotation[1]) * t,
+      a.rotation[2] + (b.rotation[2] - a.rotation[2]) * t,
+    ],
+  }
+}
+
 /**
  * Headless R3F component — drives the joint animation and (in mobile mode)
  * the AGV platform pose.  Pick-and-place sequence:
@@ -91,7 +125,7 @@ export default function AnimationController() {
     const {
       animState, robotRef, fromAngles, toAngles, fromPlatform, toPlatform,
       followTarget, startObject, endObject, mobileMode,
-      platformPose, parkingRef,
+      platformPose, parkingRef, gridMovement,
     } = store
 
     // ── Follow mode: live IK as the user drags the target ──────────────────
@@ -171,7 +205,9 @@ export default function AnimationController() {
       useStore.setState({ jointAngles: { ...interp } })
     }
     if (mobileMode && fromPlatform && toPlatform) {
-      const ip = lerpPose(fromPlatform, toPlatform, t)
+      const ip = gridMovement
+        ? lerpPoseGrid(fromPlatform, toPlatform, t)
+        : lerpPose(fromPlatform, toPlatform, t)
       useStore.setState({ platformPose: ip })
     }
 

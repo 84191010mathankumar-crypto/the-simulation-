@@ -46,6 +46,9 @@ function App() {
   const [logs, setLogs] = useState([])
   const [loadedCount, setLoadedCount] = useState(0)
   const [customCode, setCustomCode] = useState(DEFAULT_CUSTOM_CODE)
+  const [gridMovement, setGridMovement] = useState(false)
+  const [showPaths, setShowPaths] = useState(false)
+  const [pathResetKey, setPathResetKey] = useState(0)
 
   // Live-parse the user's script.  On parse failure we keep whatever boxes
   // last parsed successfully so the scene doesn't blink to empty mid-keystroke.
@@ -103,6 +106,12 @@ function App() {
       return { id: `R${i+1}`, store, color: ROBOT_COLORS[i % ROBOT_COLORS.length], home }
     })
   }, [robotCount])
+
+  // Push the grid-movement toggle into every robot's store as it changes —
+  // same pattern as mobileMode above, just decoupled from robotCount.
+  useEffect(() => {
+    for (const r of robots) r.store.setState({ gridMovement })
+  }, [robots, gridMovement])
 
   // Each box has a ref into the scene mesh so the scheduler can reparent it.
   const meshRefs = useRef(new Map())
@@ -164,6 +173,7 @@ function App() {
     setLogs([])
     setRunning(false)
     setTaskCounts({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
+    setPathResetKey((k) => k + 1)
   }
 
   // When the user picks a different scenario, reset everything so the new
@@ -209,6 +219,10 @@ function App() {
         customCode={customCode}
         onCustomCodeChange={onCustomCodeChange}
         customError={customParse.error}
+        gridMovement={gridMovement}
+        setGridMovement={setGridMovement}
+        showPaths={showPaths}
+        setShowPaths={setShowPaths}
       />
       <WarehouseScene
         robots={robots}
@@ -216,6 +230,9 @@ function App() {
         scheduler={scheduler}
         roomSize={ROOM_SIZE}
         registerMeshRef={registerMeshRef}
+        gridMovement={gridMovement}
+        showPaths={showPaths}
+        pathResetKey={pathResetKey}
       />
     </div>
   )

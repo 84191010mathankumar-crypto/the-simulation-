@@ -1,6 +1,6 @@
-import React, { Suspense, useEffect, useMemo, useRef } from 'react'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Edges } from '@react-three/drei'
+import { OrbitControls, Grid, Edges, Line } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   RobotArm, AnimationController, RobotStoreProvider,
@@ -124,10 +124,48 @@ function SchedulerTick({ scheduler }) {
   return null
 }
 
+/* Traces a robot's AGV as a thick blue line.  Samples the platform position
+ * a few times a second (not every frame — keeps the point list small) and
+ * clears itself whenever `resetSignal` changes. */
+function RobotPath({ store, resetSignal }) {
+  const [points, setPoints] = useState([])
+  const lastSampleRef = useRef(0)
+  const lastPosRef = useRef(null)
+
+  useEffect(() => {
+    setPoints([])
+    lastPosRef.current = null
+  }, [resetSignal])
+
+  useFrame(() => {
+    const { platformPose, mobileMode } = store.getState()
+    if (!mobileMode) return
+    const now = performance.now()
+    if (now - lastSampleRef.current < 80) return
+    lastSampleRef.current = now
+
+    const p = platformPose.position
+    const last = lastPosRef.current
+    if (last && Math.hypot(p[0] - last[0], p[2] - last[2]) < 0.02) return
+    lastPosRef.current = p
+
+    setPoints((pts) => {
+      const next = [...pts, [p[0], 0.03, p[2]]]
+      return next.length > 1500 ? next.slice(-1500) : next
+    })
+  })
+
+  if (points.length < 2) return null
+  return <Line points={points} color="#1456e0" lineWidth={4} />
+}
+
 /* Distinct per-robot accent colours. */
 const ROBOT_COLORS = ['#ff6000','#3b82f6','#10b981','#a855f7','#f43f5e','#eab308','#06b6d4','#fb7185','#84cc16']
 
-export default function WarehouseScene({ robots, boxes, scheduler, roomSize, registerMeshRef }) {
+export default function WarehouseScene({
+  robots, boxes, scheduler, roomSize, registerMeshRef,
+  gridMovement, showPaths, pathResetKey,
+}) {
   return (
     <div className="scene-wrap">
       <div className="scene-stamp">
@@ -169,11 +207,11 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
       <Grid
         args={[roomSize, roomSize]}
         cellSize={1}
-        cellThickness={0.75}
-        cellColor="#a0aab3"
+        cellThickness={gridMovement ? 1.3 : 0.75}
+        cellColor={gridMovement ? '#3b82f6' : '#a0aab3'}
         sectionSize={5}
-        sectionThickness={1.2}
-        sectionColor="#7b8693"
+        sectionThickness={gridMovement ? 2.0 : 1.2}
+        sectionColor={gridMovement ? '#1d4ed8' : '#7b8693'}
         fadeDistance={roomSize * 0.8}
         fadeStrength={1.6}
         fadeFrom={0}
@@ -225,6 +263,10 @@ export default function WarehouseScene({ robots, boxes, scheduler, roomSize, reg
 
         {boxes.map((b) => <Box key={b.id} box={b} registerMeshRef={registerMeshRef} />)}
         {boxes.map((b) => <TargetMarker key={b.id + '-tgt'} box={b} />)}
+
+        {showPaths && robots.map((r) => (
+          <RobotPath key={r.id + '-path'} store={r.store} resetSignal={pathResetKey} />
+        ))}
 
         <SchedulerTick scheduler={scheduler} />
       </Suspense>

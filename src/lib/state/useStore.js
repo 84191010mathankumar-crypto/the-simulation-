@@ -103,6 +103,9 @@ export function createRobotStore() {
     platformGroupRef: null,
     fromPlatform: null,
     toPlatform: null,
+    // When true, the AGV travels in axis-aligned (X-then-Z) legs instead of a
+    // straight diagonal line, so it visually follows the floor grid.
+    gridMovement: false,
 
     // ── Log ────────────────────────────────────────────────────────────────
     logs: [],
@@ -126,6 +129,7 @@ export function createRobotStore() {
     setPlatformPose:     (p) => set({ platformPose: p }),
     setHomePlatform:     (p) => set({ homePlatform: p }),
     setParkingRef:       (v) => set({ parkingRef: v }),
+    setGridMovement:     (v) => set({ gridMovement: v }),
     setPlatformGroupRef: (r) => set({ platformGroupRef: r }),
     setAnimProgress:     (p) => set({ animProgress: p }),
     setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),

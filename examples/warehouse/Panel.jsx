@@ -7,6 +7,7 @@ export default function Panel({
   scenarios, scenarioId, onScenarioChange,
   onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal,
   customCode, onCustomCodeChange, customError,
+  gridMovement, setGridMovement, showPaths, setShowPaths,
 }) {
   const allLoaded = loadedCount >= robotsTotal
   const total = taskCounts.pending + taskCounts.assigned + taskCounts.done
@@ -94,6 +95,29 @@ export default function Panel({
         <div className="tick-row">
           {[1,2,3,4,5,6].map((n) => <span key={n}>{n}</span>)}
         </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <span className="sec-num">03·a</span>
+          <span className="sec-title">Movement</span>
+        </div>
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={gridMovement}
+            onChange={(e) => setGridMovement(e.target.checked)}
+          />
+          <span>Snap AGVs to grid lines</span>
+        </label>
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={showPaths}
+            onChange={(e) => setShowPaths(e.target.checked)}
+          />
+          <span>Show travelled path</span>
+        </label>
       </section>
 
       <section className="section dispatch">
