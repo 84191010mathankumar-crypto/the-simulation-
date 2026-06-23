@@ -217,43 +217,100 @@ function legPosition(a, b, u) {
   return [a[0] + (b[0] - a[0]) * u, y, a[2] + (b[2] - a[2]) * u]
 }
 
-/* Expands a raw path so it rides along the floor's grid lines for as much
- * of the journey as possible.  Each leg a→b becomes: a → nearest grid
- * intersection to a → the intersection that shares b's grid X (still a real
- * intersection, since both coordinates are snapped) → nearest grid
- * intersection to b → b.  The a→aSnap and bSnap→b hops are still diagonal
- * at this point (the AGV parks wherever the target object actually is, not
- * necessarily on the grid) — axisAlignPath (called right after this by
- * buildSafePath) straightens those into axis-aligned hops too. */
-function gridSnapPath(waypoints) {
-  const out = [waypoints[0]]
-  const push = (p) => {
-    const prev = out[out.length - 1]
-    if (Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 1e-4) out.push(p)
+/* True grid-cell pathfinding (BFS) between two ON-GRID points, routing
+ * around any zone.  Replaces the old "bounce off one corner" heuristic,
+ * which could only represent a single simple detour — with the floor
+ * already bent into an L-shaped grid route, a zone sitting near the elbow
+ * could block BOTH legs at once, and the corner-bounce had no way to find
+ * a real way around that, producing convoluted or backtracking paths.
+ * BFS on the actual grid always finds a genuine shortest route, so the
+ * result is both correct (never enters a zone) and visually sane (no
+ * needless zig-zagging). Returns null if no route exists in the searched
+ * area (caller falls back to the simple corner-bounce in that case). */
+function bfsGridPath(start2, goal2, zones) {
+  const margin = AGV_CLEARANCE
+  const blocked = (x, z) => zones.some((zo) =>
+    x >= zo.minX - margin && x <= zo.maxX + margin && z >= zo.minZ - margin && z <= zo.maxZ + margin)
+
+  const xs = [start2[0], goal2[0]], zs = [start2[1], goal2[1]]
+  for (const zo of zones) { xs.push(zo.minX, zo.maxX); zs.push(zo.minZ, zo.maxZ) }
+  const pad = 3
+  const minX = Math.floor(Math.min(...xs)) - pad, maxX = Math.ceil(Math.max(...xs)) + pad
+  const minZ = Math.floor(Math.min(...zs)) - pad, maxZ = Math.ceil(Math.max(...zs)) + pad
+  // Safety cap so a pathological zone spread can't search forever.
+  if (((maxX - minX) / GRID_CELL + 1) * ((maxZ - minZ) / GRID_CELL + 1) > 4000) return null
+  if (blocked(start2[0], start2[1]) || blocked(goal2[0], goal2[1])) return null
+
+  const key = (x, z) => `${x},${z}`
+  const goalKey = key(goal2[0], goal2[1])
+  const cameFrom = new Map([[key(start2[0], start2[1]), null]])
+  const queue = [start2]
+  const DIRS = [[GRID_CELL, 0], [-GRID_CELL, 0], [0, GRID_CELL], [0, -GRID_CELL]]
+
+  for (let qi = 0; qi < queue.length; qi++) {
+    const [x, z] = queue[qi]
+    if (key(x, z) === goalKey) break
+    for (const [dx, dz] of DIRS) {
+      const nx = x + dx, nz = z + dz
+      if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue
+      const nk = key(nx, nz)
+      if (cameFrom.has(nk) || blocked(nx, nz)) continue
+      cameFrom.set(nk, [x, z])
+      queue.push([nx, nz])
+    }
   }
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    const a = waypoints[i], b = waypoints[i + 1]
-    const y = a[1]
-    // Bias both snaps towards the OTHER end of the leg, not to the nearest
-    // line — keeps aSnap strictly ahead of a and bSnap strictly behind b
-    // (along the travel direction), so neither hookup ever backtracks.
-    const aSnap = [snapBiased(a[0], b[0]), y, snapBiased(a[2], b[2])]
-    const bSnap = [snapBiased(b[0], a[0]), y, snapBiased(b[2], a[2])]
-    const bend  = [bSnap[0], y, aSnap[2]]
-    push(aSnap); push(bend); push(bSnap); push(b)
+  if (!cameFrom.has(goalKey)) return null
+
+  const cells = []
+  for (let cur = goal2; cur; cur = cameFrom.get(key(cur[0], cur[1]))) cells.push(cur)
+  cells.reverse()
+
+  // Merge consecutive cells that continue in the same direction into one leg.
+  const out = [cells[0]]
+  let prevDir = null
+  for (let i = 1; i < cells.length; i++) {
+    const dir = [Math.sign(cells[i][0] - cells[i - 1][0]), Math.sign(cells[i][1] - cells[i - 1][1])]
+    if (prevDir && dir[0] === prevDir[0] && dir[1] === prevDir[1]) out[out.length - 1] = cells[i]
+    else out.push(cells[i])
+    prevDir = dir
   }
   return out
 }
 
-/* Builds the AGV's travel path from fromPos to toPos: grid-snapped if
- * `gridMovement` is on, then guaranteed zone-safe either way — see
- * resolveZoneCrossings, which re-checks the FINAL path (after snapping) so
- * a detour the snap step introduces can never sneak the AGV through a
- * restricted zone. */
+/* Builds the AGV's travel path from fromPos to toPos.  Off the grid it's
+ * just a zone-safe straight/bounced line (resolveZoneCrossings).  On the
+ * grid: snap the endpoints onto the grid (biased so the snap is always
+ * progress, never backwards — see snapBiased), BFS the safe route between
+ * those grid points, then hook the unavoidable short off-grid stub at each
+ * end back up — resolveZoneCrossings runs last as a safety net for those
+ * two stubs only, since the BFS portion is already provably zone-clear. */
 function buildSafePath(fromPos, toPos, zones, gridMovement) {
-  let path = gridMovement ? axisAlignPath(gridSnapPath([fromPos, toPos])) : [fromPos, toPos]
-  path = resolveZoneCrossings(path, zones, gridMovement)
-  return path
+  if (!gridMovement) return resolveZoneCrossings([fromPos, toPos], zones, false)
+
+  const y = fromPos[1]
+  const aSnap2 = [snapBiased(fromPos[0], toPos[0]), snapBiased(fromPos[2], toPos[2])]
+  const bSnap2 = [snapBiased(toPos[0], fromPos[0]), snapBiased(toPos[2], fromPos[2])]
+  const core2 = (zones && zones.length > 0 && (aSnap2[0] !== bSnap2[0] || aSnap2[1] !== bSnap2[1]))
+    ? bfsGridPath(aSnap2, bSnap2, zones)
+    : null
+  const corePoints2 = core2 || [aSnap2, bSnap2]
+
+  let path = [fromPos, ...corePoints2.map((p) => [p[0], y, p[1]]), toPos]
+  path = dedupePath(path)
+  path = axisAlignPath(path)
+  return resolveZoneCrossings(path, zones, true)
+}
+
+/* Drops consecutive points that are (almost) the same — happens whenever
+ * fromPos/toPos already sit on the grid, so their snapped point coincides
+ * with them and would otherwise leave a useless zero-length leg. */
+function dedupePath(path) {
+  const out = [path[0]]
+  for (let i = 1; i < path.length; i++) {
+    const prev = out[out.length - 1], p = path[i]
+    if (Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 1e-4) out.push(p)
+  }
+  return out
 }
 
 /* Walks a multi-waypoint path (as built by buildSafePath) to the world
