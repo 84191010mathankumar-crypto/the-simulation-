@@ -4,6 +4,7 @@ import { OrbitControls, Grid, Edges, Line } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   RobotArm, AnimationController, RobotStoreProvider,
+  GantryRobot, GantryAnimationController,
 } from 'robo-playground'
 import ZoneTool from './ZoneTool'
 
@@ -164,20 +165,22 @@ function RobotPath({ store, resetSignal }) {
 const ROBOT_COLORS = ['#ff6000','#3b82f6','#10b981','#a855f7','#f43f5e','#eab308','#06b6d4','#fb7185','#84cc16']
 
 export default function WarehouseScene({
-  robots, boxes, scheduler, roomSize, registerMeshRef,
+  robots, robotType, gantryTravelX, gantryTravelZ,
+  boxes, scheduler, roomSize, registerMeshRef,
   gridMovement, showPaths, pathResetKey,
   zoneToolActive, zones, selectedZoneId, onCreateZone, onSelectZone, onUpdateZone, onDeselectZone,
 }) {
+  const isGantry = robotType === 'gantry'
   return (
     <div className="scene-wrap">
       <div className="scene-stamp">
         <div className="stamp-num">Fig. 02 / Floor plan</div>
-        <div className="stamp-title">Multi-fleet workcell</div>
+        <div className="stamp-title">{isGantry ? 'Overhead gantry' : 'Multi-fleet workcell'}</div>
         <div className="stamp-rule" />
       </div>
       <div className="scene-meta">
-        <div className="num">{String(robots.length).padStart(2,'0')}</div>
-        <div>{robots.length === 1 ? 'unit' : 'units'} dispatched</div>
+        <div className="num">{isGantry ? '01' : String(robots.length).padStart(2,'0')}</div>
+        <div>{isGantry ? 'gantry' : (robots.length === 1 ? 'unit' : 'units')} dispatched</div>
       </div>
     <Canvas
       camera={{ position: [roomSize * 0.9, roomSize * 0.9, roomSize * 0.9], fov: 42, near: 0.1, far: 200 }}
@@ -256,19 +259,28 @@ export default function WarehouseScene({
       ))}
 
       <Suspense fallback={null}>
-        {robots.map((r, i) => (
-          <RobotStoreProvider key={r.id} store={r.store}>
-            <RobotOnPlatform store={r.store} robotColor={ROBOT_COLORS[i % ROBOT_COLORS.length]} />
-            <AnimationController />
-          </RobotStoreProvider>
-        ))}
+        {isGantry ? (
+          <>
+            <GantryRobot travelX={gantryTravelX} travelZ={gantryTravelZ} />
+            <GantryAnimationController />
+          </>
+        ) : (
+          <>
+            {robots.map((r, i) => (
+              <RobotStoreProvider key={r.id} store={r.store}>
+                <RobotOnPlatform store={r.store} robotColor={ROBOT_COLORS[i % ROBOT_COLORS.length]} />
+                <AnimationController />
+              </RobotStoreProvider>
+            ))}
+
+            {showPaths && robots.map((r) => (
+              <RobotPath key={r.id + '-path'} store={r.store} resetSignal={pathResetKey} />
+            ))}
+          </>
+        )}
 
         {boxes.map((b) => <Box key={b.id} box={b} registerMeshRef={registerMeshRef} />)}
         {boxes.map((b) => <TargetMarker key={b.id + '-tgt'} box={b} />)}
-
-        {showPaths && robots.map((r) => (
-          <RobotPath key={r.id + '-path'} store={r.store} resetSignal={pathResetKey} />
-        ))}
 
         <SchedulerTick scheduler={scheduler} />
       </Suspense>

@@ -19,8 +19,9 @@ import { createRobotStore } from 'robo-playground'
 
 import WarehouseScene from './WarehouseScene'
 import Panel from './Panel'
-import { SCENARIOS, ROOM_SIZE, DEFAULT_CUSTOM_CODE, parseCustomCode } from './script'
+import { SCENARIOS, ROOM_SIZE, DEFAULT_CUSTOM_CODE, parseCustomCode, prioritizeBoxes } from './script'
 import { createScheduler } from './scheduler'
+import { createGantryScheduler } from './gantryScheduler'
 
 import './Panel.css'
 
@@ -41,6 +42,7 @@ function makeRobotHomes(n, roomSize) {
 
 function App() {
   const [robotCount, setRobotCount] = useState(2)
+  const [robotType, setRobotType] = useState('arms')   // 'arms' | 'gantry'
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
   const [running, setRunning] = useState(false)
   const [logs, setLogs] = useState([])
@@ -94,7 +96,13 @@ function App() {
     () => allScenarios.find((s) => s.id === scenarioId) || allScenarios[0],
     [scenarioId, allScenarios],
   )
-  const scenarioBoxes = scenario.boxes
+  // Run every scenario's boxes through the smart-prioritiser.  If the
+  // scenario already declares explicit tiers (house/ziggurat do), it's a
+  // no-op; otherwise boxes are ordered by target height so a roof never
+  // gets placed before its walls.
+  const scenarioBoxes = useMemo(() => prioritizeBoxes(scenario.boxes), [scenario])
+
+  const isGantry = robotType === 'gantry'
 
   const [taskCounts, setTaskCounts] = useState({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
 
@@ -157,11 +165,18 @@ function App() {
     setLogs((cur) => [{ id: Date.now() + Math.random(), ts: performance.now(), level, msg }, ...cur].slice(0, 200))
   }, [])
 
-  // Scheduler is recreated when robot list changes.
-  const scheduler = useMemo(
+  // Scheduler is recreated when robot list changes.  We build both the arm
+  // fleet scheduler and the gantry scheduler; the active one is selected by
+  // `robotType`.  (The inactive one is cheap and never ticked.)
+  const armScheduler = useMemo(
     () => createScheduler({ robots, boxes: boxesForScheduler, onLog: pushLog }),
     [robots, boxesForScheduler, pushLog]
   )
+  const gantryScheduler = useMemo(
+    () => createGantryScheduler({ boxes: boxesForScheduler, onLog: pushLog }),
+    [boxesForScheduler, pushLog]
+  )
+  const scheduler = isGantry ? gantryScheduler : armScheduler
 
   // Keep status counters fresh while running.
   useEffect(() => {
@@ -177,8 +192,10 @@ function App() {
 
   // Subscribe to each robot's `robotLoaded` flag so the Start button can stay
   // disabled until every URDF finished loading.  When the slider changes, we
-  // rebuild subscriptions and reset the counter.
+  // rebuild subscriptions and reset the counter.  The gantry has no URDF to
+  // load, so it reports as ready immediately.
   useEffect(() => {
+    if (isGantry) { setLoadedCount(1); return }
     setLoadedCount(robots.filter((r) => r.store.getState().robotLoaded).length)
     const unsubs = robots.map((r) => r.store.subscribe(
       (s) => s.robotLoaded,
@@ -187,7 +204,7 @@ function App() {
       },
     ))
     return () => { for (const u of unsubs) u() }
-  }, [robots])
+  }, [robots, isGantry])
 
   const onStart = () => {
     setRunning(true)
@@ -201,16 +218,38 @@ function App() {
     setPathResetKey((k) => k + 1)
   }
 
+  // Switching robot type while idle wipes the slate so the new configuration
+  // starts from a clean pose.  The actual reset of the *new* scheduler is
+  // done in the [robotType] effect below — here we just bail out while busy.
+  const onRobotTypeChange = useCallback((next) => {
+    if (running) return
+    if (next === robotType) return
+    setRobotType(next)
+  }, [running, robotType])
+
+  // Reset the active scheduler whenever the robot type changes (and on first
+  // mount) so the gantry/arm returns home and boxes snap back to pickup.
+  useEffect(() => {
+    if (running) return
+    scheduler.reset()
+    setLogs([])
+    setTaskCounts({ pending: scenarioBoxes.length, assigned: 0, done: 0 })
+    setPathResetKey((k) => k + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [robotType])
+
   // When the user picks a different scenario, reset everything so the new
   // boxes appear in their pickup positions and the scheduler restarts.
   const onScenarioChange = (id) => {
     if (running) return
+    scheduler.reset()
     setScenarioId(id)
     setLogs([])
     setTaskCounts({
       pending: (allScenarios.find((s) => s.id === id) || allScenarios[0]).boxes.length,
       assigned: 0, done: 0,
     })
+    setPathResetKey((k) => k + 1)
   }
 
   // Live custom-script edits change the box list under us — reflect the new
@@ -231,6 +270,8 @@ function App() {
       <Panel
         robotCount={robotCount}
         setRobotCount={setRobotCount}
+        robotType={robotType}
+        setRobotType={onRobotTypeChange}
         scenarios={allScenarios}
         scenarioId={scenarioId}
         onScenarioChange={onScenarioChange}
@@ -240,7 +281,7 @@ function App() {
         taskCounts={taskCounts}
         logs={logs}
         loadedCount={loadedCount}
-        robotsTotal={robots.length}
+        robotsTotal={isGantry ? 1 : robots.length}
         customCode={customCode}
         onCustomCodeChange={onCustomCodeChange}
         customError={customParse.error}
@@ -257,6 +298,9 @@ function App() {
       />
       <WarehouseScene
         robots={robots}
+        robotType={robotType}
+        gantryTravelX={ROOM_SIZE / 2 - 0.8}
+        gantryTravelZ={ROOM_SIZE / 2 - 0.8}
         boxes={boxesForScene}
         scheduler={scheduler}
         roomSize={ROOM_SIZE}

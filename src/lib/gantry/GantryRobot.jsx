@@ -2,9 +2,14 @@ import React, { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import useGantryStore, { RAIL_Y } from './useGantryStore'
 
-// Frame footprint — how far the rails/bridge reach in each direction.
-export const TRAVEL_X = 1.85
-export const TRAVEL_Z = 1.35
+// Default frame footprint — how far the rails/bridge reach in each direction.
+// Can be overridden via <GantryRobot travelX=.. travelZ=.. /> to span a larger
+// area (e.g. the whole warehouse floor).
+export const DEFAULT_TRAVEL_X = 1.85
+export const DEFAULT_TRAVEL_Z = 1.35
+// Back-compat aliases for the gantry example which imports the old names.
+export const TRAVEL_X = DEFAULT_TRAVEL_X
+export const TRAVEL_Z = DEFAULT_TRAVEL_Z
 
 // Distance from the gripper's mast attachment point down to the fingertips
 // (its actual pinch point) — the mast has to fall short by this much so the
@@ -26,21 +31,24 @@ function Leg({ x, z }) {
 }
 
 /** Static frame: 4 legs + 2 rails the bridge travels along. */
-function GantryFrame() {
-  const railLen = TRAVEL_X * 2 + 0.3
+function GantryFrame({ travelX, travelZ }) {
+  const railLen = travelX * 2 + 0.3
+  // Scale leg/rail thickness with the frame span so a warehouse-wide gantry
+  // doesn't look like a toothpick frame.
+  const t = Math.max(0.12, Math.min(0.4, travelX * 0.06))
   return (
     <group>
-      <Leg x={-TRAVEL_X} z={-TRAVEL_Z} />
-      <Leg x={TRAVEL_X}  z={-TRAVEL_Z} />
-      <Leg x={-TRAVEL_X} z={TRAVEL_Z} />
-      <Leg x={TRAVEL_X}  z={TRAVEL_Z} />
+      <Leg x={-travelX} z={-travelZ} />
+      <Leg x={ travelX} z={-travelZ} />
+      <Leg x={-travelX} z={ travelZ} />
+      <Leg x={ travelX} z={ travelZ} />
 
-      <mesh castShadow receiveShadow position={[0, RAIL_Y, -TRAVEL_Z]}>
-        <boxGeometry args={[railLen, 0.1, 0.1]} />
+      <mesh castShadow receiveShadow position={[0, RAIL_Y, -travelZ]}>
+        <boxGeometry args={[railLen, t, t]} />
         <meshStandardMaterial {...accent} />
       </mesh>
-      <mesh castShadow receiveShadow position={[0, RAIL_Y, TRAVEL_Z]}>
-        <boxGeometry args={[railLen, 0.1, 0.1]} />
+      <mesh castShadow receiveShadow position={[0, RAIL_Y, travelZ]}>
+        <boxGeometry args={[railLen, t, t]} />
         <meshStandardMaterial {...accent} />
       </mesh>
     </group>
@@ -75,7 +83,7 @@ function Gripper({ gripperRef, leftFingerRef, rightFingerRef }) {
  * `pose.{x,y,z,rotY}` in the store is the gripper TIP position directly —
  * there's no inverse kinematics step, the numbers are the position.
  */
-export default function GantryRobot() {
+export default function GantryRobot({ travelX = DEFAULT_TRAVEL_X, travelZ = DEFAULT_TRAVEL_Z }) {
   const bridgeRef  = useRef()
   const trolleyRef = useRef()
   const mastRef    = useRef()
@@ -105,12 +113,13 @@ export default function GantryRobot() {
     if (rightFingerRef.current) rightFingerRef.current.position.x =  fingerOffsetRef.current
   })
 
+  const beamDepth = travelZ * 2 + 0.2
   return (
     <group>
-      <GantryFrame />
+      <GantryFrame travelX={travelX} travelZ={travelZ} />
       <group ref={bridgeRef}>
         <mesh castShadow receiveShadow position={[0, RAIL_Y, 0]}>
-          <boxGeometry args={[0.16, 0.16, TRAVEL_Z * 2 + 0.2]} />
+          <boxGeometry args={[0.16, 0.16, beamDepth]} />
           <meshStandardMaterial {...steel} />
         </mesh>
         <group ref={trolleyRef} position={[0, RAIL_Y, 0]}>

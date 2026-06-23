@@ -4,6 +4,7 @@ import CodeEditor from './CodeEditor'
 
 export default function Panel({
   robotCount, setRobotCount,
+  robotType, setRobotType,
   scenarios, scenarioId, onScenarioChange,
   onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal,
   customCode, onCustomCodeChange, customError,
@@ -14,6 +15,7 @@ export default function Panel({
   const total = taskCounts.pending + taskCounts.assigned + taskCounts.done
   const scenario = scenarios.find((s) => s.id === scenarioId) || scenarios[0]
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const isGantry = robotType === 'gantry'
 
   return (
     <aside className={`warehouse-panel ${drawerOpen ? 'drawer-open' : ''}`}>
@@ -76,6 +78,39 @@ export default function Panel({
       <section className="section">
         <div className="section-head">
           <span className="sec-num">02</span>
+          <span className="sec-title">Robot</span>
+        </div>
+        <div className="segmented" role="tablist">
+          <button
+            role="tab"
+            aria-selected={!isGantry}
+            className={`seg-btn ${!isGantry ? 'active' : ''}`}
+            disabled={running}
+            onClick={() => setRobotType('arms')}
+          >
+            Fleet of arms
+          </button>
+          <button
+            role="tab"
+            aria-selected={isGantry}
+            className={`seg-btn ${isGantry ? 'active' : ''}`}
+            disabled={running}
+            onClick={() => setRobotType('gantry')}
+          >
+            Grid gantry
+          </button>
+        </div>
+        <div className="robot-type-note">
+          {isGantry
+            ? 'One overhead gantry spanning the whole floor — sequential, one box at a time.'
+            : 'Autonomous arms on AGVs — parallel pick-and-place, nearest-first.'}
+        </div>
+      </section>
+
+      {!isGantry && (
+      <section className="section">
+        <div className="section-head">
+          <span className="sec-num">02·b</span>
           <span className="sec-title">Fleet size</span>
         </div>
         <div className="robot-control">
@@ -97,7 +132,9 @@ export default function Panel({
           {[1,2,3,4,5,6].map((n) => <span key={n}>{n}</span>)}
         </div>
       </section>
+      )}
 
+      {!isGantry && (
       <section className="section">
         <div className="section-head">
           <span className="sec-num">03·a</span>
@@ -120,7 +157,9 @@ export default function Panel({
           <span>Show travelled path</span>
         </label>
       </section>
+      )}
 
+      {!isGantry && (
       <section className="section">
         <div className="section-head">
           <span className="sec-num">03·b</span>
@@ -153,6 +192,7 @@ export default function Panel({
           </ul>
         )}
       </section>
+      )}
 
       <section className="section dispatch">
         <div className="section-head">
@@ -214,7 +254,7 @@ export default function Panel({
 
       <div className="colophon">
         <span>{scenario.name} · {scenario.boxes.length} pieces</span>
-        <span>{robotsTotal} arms</span>
+        <span>{isGantry ? '1 gantry' : `${robotsTotal} arms`}</span>
       </div>
     </aside>
   )

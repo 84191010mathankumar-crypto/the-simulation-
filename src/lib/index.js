@@ -42,3 +42,11 @@ export {
   lerpAngles, easeInOutCubic,
   PINCH_Z,
 } from './ik/ikSolver.js'
+
+// Gantry robot (single overhead pick-and-place machine)
+export { default as GantryRobot,
+         DEFAULT_TRAVEL_X, DEFAULT_TRAVEL_Z } from './gantry/GantryRobot.jsx'
+export { default as GantryAnimationController } from './gantry/GantryAnimationController.jsx'
+export { default as useGantryStore,
+         RAIL_Y, TRAVEL_Y, HOME_POSE as GANTRY_HOME_POSE }
+  from './gantry/useGantryStore.js'

@@ -209,6 +209,44 @@ chimney
 // ── DSL parser ────────────────────────────────────────────────────────────
 const D2R = Math.PI / 180
 
+/**
+ * Assign a smart build priority to every box if the user hasn't already.
+ *
+ * Build order matters: a roof can't be placed before the walls that hold it
+ * up, a chimney can't go on before the roof.  Scenarios and the DSL let the
+ * user set this explicitly via `tier` / `priority`, but when they don't we
+ * infer it from the target height: lower target-Y boxes go first, and boxes
+ * whose target Y is within a small band of each other are treated as the
+ * same tier (so the four walls of a house, all at the same height, can be
+ * placed in any order rather than strictly serially).
+ *
+ * If ANY box already carries an explicit non-zero priority, the caller knew
+ * what they wanted and we leave the list untouched.
+ */
+export function prioritizeBoxes(boxes) {
+  if (!boxes.length) return boxes
+  if (boxes.some((b) => (b.priority ?? 0) !== 0)) return boxes
+
+  const BAND = 0.15 // metres of vertical slack that still counts as "same tier"
+  const sorted = [...boxes].sort((a, b) => a.to[1] - b.to[1])
+
+  let tier = 0
+  let bandTop = sorted[0].to[1] + BAND
+  const tierByY = []
+  for (const b of sorted) {
+    if (b.to[1] > bandTop) {
+      tier += 1
+      bandTop = b.to[1] + BAND
+    }
+    tierByY.push(tier)
+  }
+
+  const yToTier = new Map()
+  sorted.forEach((b, i) => yToTier.set(b, tierByY[i]))
+  return boxes.map((b) => ({ ...b, priority: yToTier.get(b) ?? 0 }))
+}
+
+
 function parseTuple(s, n) {
   const parts = s.split(',').map((x) => parseFloat(x.trim()))
   if (parts.length !== n) return null
