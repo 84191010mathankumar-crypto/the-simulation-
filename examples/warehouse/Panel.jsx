@@ -8,6 +8,7 @@ export default function Panel({
   onStart, onReset, running, taskCounts, logs, loadedCount, robotsTotal,
   customCode, onCustomCodeChange, customError,
   gridMovement, setGridMovement, showPaths, setShowPaths,
+  zones, zoneToolActive, setZoneToolActive, onDeleteZone, onSelectZone, selectedZoneId,
 }) {
   const allLoaded = loadedCount >= robotsTotal
   const total = taskCounts.pending + taskCounts.assigned + taskCounts.done
@@ -118,6 +119,39 @@ export default function Panel({
           />
           <span>Show travelled path</span>
         </label>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <span className="sec-num">03·b</span>
+          <span className="sec-title">Restricted zones</span>
+        </div>
+        <div className="btn-row">
+          <button
+            className={`btn-secondary ${zoneToolActive ? 'active-zone-tool' : ''}`}
+            onClick={() => setZoneToolActive((v) => !v)}
+          >
+            {zoneToolActive ? 'Click two floor points…' : '+ Draw zone'}
+          </button>
+        </div>
+        {zones.length > 0 && (
+          <ul className="zone-list">
+            {zones.map((z, i) => (
+              <li
+                key={z.id}
+                className={z.id === selectedZoneId ? 'active' : ''}
+                onClick={() => onSelectZone(z.id)}
+              >
+                <span>Zone {i + 1}</span>
+                <button
+                  className="zone-del"
+                  aria-label="Delete zone"
+                  onClick={(e) => { e.stopPropagation(); onDeleteZone(z.id) }}
+                >×</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="section dispatch">

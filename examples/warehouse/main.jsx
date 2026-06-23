@@ -50,6 +50,27 @@ function App() {
   const [showPaths, setShowPaths] = useState(false)
   const [pathResetKey, setPathResetKey] = useState(0)
 
+  const [zones, setZones] = useState([])
+  const [zoneToolActive, setZoneToolActive] = useState(false)
+  const [selectedZoneId, setSelectedZoneId] = useState(null)
+  const zoneIdRef = useRef(0)
+
+  const onCreateZone = useCallback((rect) => {
+    const id = `zone-${zoneIdRef.current++}`
+    setZones((zs) => [...zs, { id, ...rect }])
+    setZoneToolActive(false)
+    setSelectedZoneId(id)
+  }, [])
+  const onUpdateZone = useCallback((id, patch) => {
+    setZones((zs) => zs.map((z) => (z.id === id ? { ...z, ...patch } : z)))
+  }, [])
+  const onSelectZone = useCallback((id) => setSelectedZoneId(id), [])
+  const onDeselectZone = useCallback(() => setSelectedZoneId(null), [])
+  const onDeleteZone = useCallback((id) => {
+    setZones((zs) => zs.filter((z) => z.id !== id))
+    setSelectedZoneId((sel) => (sel === id ? null : sel))
+  }, [])
+
   // Live-parse the user's script.  On parse failure we keep whatever boxes
   // last parsed successfully so the scene doesn't blink to empty mid-keystroke.
   const lastGoodCustomBoxesRef = useRef(null)
@@ -107,11 +128,15 @@ function App() {
     })
   }, [robotCount])
 
-  // Push the grid-movement toggle into every robot's store as it changes —
-  // same pattern as mobileMode above, just decoupled from robotCount.
+  // Push the grid-movement toggle and the restricted zones into every
+  // robot's store as they change — same pattern as mobileMode above, just
+  // decoupled from robotCount.
   useEffect(() => {
     for (const r of robots) r.store.setState({ gridMovement })
   }, [robots, gridMovement])
+  useEffect(() => {
+    for (const r of robots) r.store.setState({ zones })
+  }, [robots, zones])
 
   // Each box has a ref into the scene mesh so the scheduler can reparent it.
   const meshRefs = useRef(new Map())
@@ -223,6 +248,12 @@ function App() {
         setGridMovement={setGridMovement}
         showPaths={showPaths}
         setShowPaths={setShowPaths}
+        zones={zones}
+        zoneToolActive={zoneToolActive}
+        setZoneToolActive={setZoneToolActive}
+        onDeleteZone={onDeleteZone}
+        onSelectZone={onSelectZone}
+        selectedZoneId={selectedZoneId}
       />
       <WarehouseScene
         robots={robots}
@@ -233,6 +264,13 @@ function App() {
         gridMovement={gridMovement}
         showPaths={showPaths}
         pathResetKey={pathResetKey}
+        zones={zones}
+        zoneToolActive={zoneToolActive}
+        selectedZoneId={selectedZoneId}
+        onCreateZone={onCreateZone}
+        onSelectZone={onSelectZone}
+        onUpdateZone={onUpdateZone}
+        onDeselectZone={onDeselectZone}
       />
     </div>
   )

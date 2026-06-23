@@ -57,53 +57,136 @@ function computePlatformPoseFor(targetWorldPos, currentPlatformPos, parkingRef) 
   return { position: [px, 0, pz], rotation: [0, 0, 0] }
 }
 
-function lerpPose(a, b, t) {
-  return {
-    position: [
-      a.position[0] + (b.position[0] - a.position[0]) * t,
-      a.position[1] + (b.position[1] - a.position[1]) * t,
-      a.position[2] + (b.position[2] - a.position[2]) * t,
-    ],
-    rotation: [
-      a.rotation[0] + (b.rotation[0] - a.rotation[0]) * t,
-      a.rotation[1] + (b.rotation[1] - a.rotation[1]) * t,
-      a.rotation[2] + (b.rotation[2] - a.rotation[2]) * t,
-    ],
+// Half the AGV's footprint plus a little buffer — restricted zones are
+// expanded by this much before we test against them, so the platform body
+// (not just its centre point) stays clear of them.
+const AGV_CLEARANCE = 0.65
+
+/* Does the segment p0→p1 (2D, [x,z]) cross the zone's rectangle, expanded
+ * by `margin` on every side?  Standard slab/AABB segment test. */
+function segmentHitsZone(p0, p1, zone, margin) {
+  const lo = [zone.minX - margin, zone.minZ - margin]
+  const hi = [zone.maxX + margin, zone.maxZ + margin]
+  const d = [p1[0] - p0[0], p1[1] - p0[1]]
+  let tmin = 0, tmax = 1
+  for (let axis = 0; axis < 2; axis++) {
+    const o = p0[axis]
+    if (Math.abs(d[axis]) < 1e-9) {
+      if (o < lo[axis] || o > hi[axis]) return false
+    } else {
+      let t0 = (lo[axis] - o) / d[axis]
+      let t1 = (hi[axis] - o) / d[axis]
+      if (t0 > t1) { const tmp = t0; t0 = t1; t1 = tmp }
+      tmin = Math.max(tmin, t0)
+      tmax = Math.min(tmax, t1)
+      if (tmin > tmax) return false
+    }
   }
+  return true
 }
 
-/* Same as lerpPose, but the platform travels in two axis-aligned legs
- * (first along X, then along Z) instead of a straight diagonal — so it
- * always rides along the floor grid's lines. */
-function lerpPoseGrid(a, b, t) {
-  const [ax, ay, az] = a.position
-  const [bx, by, bz] = b.position
-  const dx = bx - ax
-  const dz = bz - az
-  const legX = Math.abs(dx)
-  const legZ = Math.abs(dz)
-  const total = legX + legZ
+function findBlockingZone(p0, p1, zones) {
+  for (const z of zones) {
+    if (segmentHitsZone(p0, p1, z, AGV_CLEARANCE)) return z
+  }
+  return null
+}
 
-  let x = ax, z = az
-  if (total > 1e-6) {
-    const along = t * total
-    if (along <= legX) {
-      x = ax + Math.sign(dx) * along
-      z = az
-    } else {
-      x = bx
-      z = az + Math.sign(dz) * (along - legX)
+/* Builds the list of waypoints (world positions) the platform should drive
+ * through to get from `fromPos` to `toPos` without entering a restricted
+ * zone.  Straight line if nothing's in the way; otherwise routes around the
+ * nearest corner of the first zone it hits.  This is a simple one-bounce
+ * router, not full pathfinding — plenty for a handful of user-drawn zones. */
+function buildAvoidancePath(fromPos, toPos, zones) {
+  if (!zones || zones.length === 0) return [fromPos, toPos]
+
+  const p0 = [fromPos[0], fromPos[2]]
+  const p1 = [toPos[0], toPos[2]]
+  const blocker = findBlockingZone(p0, p1, zones)
+  if (!blocker) return [fromPos, toPos]
+
+  const m = AGV_CLEARANCE
+  const candidates = [
+    [blocker.minX - m, blocker.minZ - m],
+    [blocker.minX - m, blocker.maxZ + m],
+    [blocker.maxX + m, blocker.minZ - m],
+    [blocker.maxX + m, blocker.maxZ + m],
+  ]
+
+  const cost = (c) => Math.hypot(c[0] - p0[0], c[1] - p0[1]) + Math.hypot(p1[0] - c[0], p1[1] - c[1])
+
+  let best = null, bestCost = Infinity
+  for (const c of candidates) {
+    if (findBlockingZone(p0, c, zones) || findBlockingZone(c, p1, zones)) continue
+    const cst = cost(c)
+    if (cst < bestCost) { bestCost = cst; best = c }
+  }
+  // Nothing fully clear (e.g. zones overlap) — still detour via the cheapest
+  // corner rather than driving straight through the obstacle.
+  if (!best) {
+    for (const c of candidates) {
+      const cst = cost(c)
+      if (cst < bestCost) { bestCost = cst; best = c }
     }
   }
 
-  return {
-    position: [x, ay + (by - ay) * t, z],
-    rotation: [
-      a.rotation[0] + (b.rotation[0] - a.rotation[0]) * t,
-      a.rotation[1] + (b.rotation[1] - a.rotation[1]) * t,
-      a.rotation[2] + (b.rotation[2] - a.rotation[2]) * t,
-    ],
+  return [fromPos, [best[0], fromPos[1], best[1]], toPos]
+}
+
+function lerpRotation(a, b, t) {
+  return [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ]
+}
+
+function legLength(a, b, gridMovement) {
+  const dx = b[0] - a[0], dz = b[2] - a[2]
+  return gridMovement ? Math.abs(dx) + Math.abs(dz) : Math.hypot(dx, dz)
+}
+
+/* Position at fraction `u` (0..1) along one leg.  When gridMovement is on,
+ * the leg itself bends into two axis-aligned segments (X then Z) instead of
+ * a diagonal — same trick as the old lerpPoseGrid, just per-leg now. */
+function legPosition(a, b, u, gridMovement) {
+  const y = a[1] + (b[1] - a[1]) * u
+  if (!gridMovement) {
+    return [a[0] + (b[0] - a[0]) * u, y, a[2] + (b[2] - a[2]) * u]
   }
+  const dx = b[0] - a[0], dz = b[2] - a[2]
+  const legX = Math.abs(dx), legZ = Math.abs(dz)
+  const total = legX + legZ
+  let x = a[0], z = a[2]
+  if (total > 1e-6) {
+    const along = u * total
+    if (along <= legX) { x = a[0] + Math.sign(dx) * along; z = a[2] }
+    else { x = b[0]; z = a[2] + Math.sign(dz) * (along - legX) }
+  }
+  return [x, y, z]
+}
+
+/* Walks a multi-waypoint path (as built by buildAvoidancePath) to the world
+ * position/rotation at overall progress `t`. */
+function poseAlongPath(path, rotA, rotB, t, gridMovement) {
+  const rotation = lerpRotation(rotA, rotB, t)
+  if (path.length < 2) return { position: [...path[0]], rotation }
+
+  const legLens = []
+  for (let i = 0; i < path.length - 1; i++) legLens.push(legLength(path[i], path[i + 1], gridMovement))
+  const total = legLens.reduce((a, b) => a + b, 0)
+  if (total < 1e-6) return { position: [...path[path.length - 1]], rotation }
+
+  let remaining = t * total
+  for (let i = 0; i < legLens.length; i++) {
+    const len = legLens[i]
+    if (remaining <= len || i === legLens.length - 1) {
+      const u = len > 1e-6 ? Math.min(1, remaining / len) : 1
+      return { position: legPosition(path[i], path[i + 1], u, gridMovement), rotation }
+    }
+    remaining -= len
+  }
+  return { position: [...path[path.length - 1]], rotation }
 }
 
 /**
@@ -125,7 +208,7 @@ export default function AnimationController() {
     const {
       animState, robotRef, fromAngles, toAngles, fromPlatform, toPlatform,
       followTarget, startObject, endObject, mobileMode,
-      platformPose, parkingRef, gridMovement,
+      platformPose, parkingRef, gridMovement, platformPath,
     } = store
 
     // ── Follow mode: live IK as the user drags the target ──────────────────
@@ -178,15 +261,18 @@ export default function AnimationController() {
         _solveSegment(useStore, store, 'end',   currentAngles, currentPlatform)
       } else if (animState === 'returning') {
         const homeAngles = clampAllJoints({ ...HOME_ANGLES })
+        const homePlatform = { ...store.homePlatform }
         useStore.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
-          fromPlatform: currentPlatform, toPlatform: { ...store.homePlatform },
+          fromPlatform: currentPlatform, toPlatform: homePlatform,
+          platformPath: buildAvoidancePath(currentPlatform.position, homePlatform.position, store.zones),
         })
         store.addLog('info', 'Returning to HOME…')
       } else {
         useStore.setState({
           fromAngles: currentAngles, toAngles: currentAngles,
           fromPlatform: currentPlatform, toPlatform: currentPlatform,
+          platformPath: [currentPlatform.position, currentPlatform.position],
         })
       }
       return
@@ -205,9 +291,10 @@ export default function AnimationController() {
       useStore.setState({ jointAngles: { ...interp } })
     }
     if (mobileMode && fromPlatform && toPlatform) {
-      const ip = gridMovement
-        ? lerpPoseGrid(fromPlatform, toPlatform, t)
-        : lerpPose(fromPlatform, toPlatform, t)
+      const path = platformPath && platformPath.length >= 2
+        ? platformPath
+        : [fromPlatform.position, toPlatform.position]
+      const ip = poseAlongPath(path, fromPlatform.rotation, toPlatform.rotation, t, gridMovement)
       useStore.setState({ platformPose: ip })
     }
 
@@ -260,6 +347,7 @@ function _solveSegment(useStore, store, target, currentAngles, currentPlatform) 
     useStore.setState({
       fromAngles: currentAngles, toAngles: clamped,
       fromPlatform: currentPlatform, toPlatform: targetPlatform,
+      platformPath: buildAvoidancePath(currentPlatform.position, targetPlatform.position, store.zones),
     })
   } else {
     addLog('warn', `IK did not converge for ${target} — target may be out of reach`)
@@ -267,6 +355,7 @@ function _solveSegment(useStore, store, target, currentAngles, currentPlatform) 
     useStore.setState({
       fromAngles: currentAngles, toAngles: currentAngles,
       fromPlatform: currentPlatform, toPlatform: currentPlatform,
+      platformPath: [currentPlatform.position, currentPlatform.position],
     })
   }
 }

@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import {
   RobotArm, AnimationController, RobotStoreProvider,
 } from 'robo-playground'
+import ZoneTool from './ZoneTool'
 
 /* ─── AGV chassis (same look as main demo's MobilePlatform) ─── */
 function MobilePlatform() {
@@ -165,6 +166,7 @@ const ROBOT_COLORS = ['#ff6000','#3b82f6','#10b981','#a855f7','#f43f5e','#eab308
 export default function WarehouseScene({
   robots, boxes, scheduler, roomSize, registerMeshRef,
   gridMovement, showPaths, pathResetKey,
+  zoneToolActive, zones, selectedZoneId, onCreateZone, onSelectZone, onUpdateZone, onDeselectZone,
 }) {
   return (
     <div className="scene-wrap">
@@ -270,6 +272,17 @@ export default function WarehouseScene({
 
         <SchedulerTick scheduler={scheduler} />
       </Suspense>
+
+      <ZoneTool
+        active={zoneToolActive}
+        zones={zones}
+        selectedZoneId={selectedZoneId}
+        roomSize={roomSize}
+        onCreateZone={onCreateZone}
+        onSelectZone={onSelectZone}
+        onUpdateZone={onUpdateZone}
+        onDeselect={onDeselectZone}
+      />
 
       <OrbitControls
         makeDefault

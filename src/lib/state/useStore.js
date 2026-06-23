@@ -103,9 +103,16 @@ export function createRobotStore() {
     platformGroupRef: null,
     fromPlatform: null,
     toPlatform: null,
+    // Waypoints (world positions) the AGV walks through for the current
+    // segment — usually just [from, to], or [from, detour-corner, to] when
+    // the direct line would cross a restricted zone (see `zones` below).
+    platformPath: null,
     // When true, the AGV travels in axis-aligned (X-then-Z) legs instead of a
     // straight diagonal line, so it visually follows the floor grid.
     gridMovement: false,
+    // User-drawn no-go rectangles ({ id, minX, maxX, minZ, maxZ }) the AGV
+    // routes around instead of driving through.
+    zones: [],
 
     // ── Log ────────────────────────────────────────────────────────────────
     logs: [],
@@ -130,6 +137,7 @@ export function createRobotStore() {
     setHomePlatform:     (p) => set({ homePlatform: p }),
     setParkingRef:       (v) => set({ parkingRef: v }),
     setGridMovement:     (v) => set({ gridMovement: v }),
+    setZones:            (v) => set({ zones: v }),
     setPlatformGroupRef: (r) => set({ platformGroupRef: r }),
     setAnimProgress:     (p) => set({ animProgress: p }),
     setAnimSegment: (from, to) => set({ fromAngles: from, toAngles: to }),
