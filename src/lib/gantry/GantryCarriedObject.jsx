@@ -1,7 +1,8 @@
 import React, { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
-import useGantryStore, { BOX_HALF } from './useGantryStore'
+import { BOX_HALF } from './useGantryStore'
+import { useGantryRobotStore } from './gantryContext'
 
 const BOX_SIZE = [BOX_HALF * 2, BOX_HALF * 2, BOX_HALF * 2]
 
@@ -12,11 +13,12 @@ const BOX_SIZE = [BOX_HALF * 2, BOX_HALF * 2, BOX_HALF * 2]
  */
 export default function GantryCarriedObject({ color = '#ebe4d2' }) {
   const meshRef = useRef()
+  const useStore = useGantryRobotStore()
 
   useFrame(() => {
     const mesh = meshRef.current
     if (!mesh) return
-    const { animState, pose, startObject, endObject, carrying } = useGantryStore.getState()
+    const { animState, pose, startObject, endObject, carrying } = useStore.getState()
 
     if (animState === 'idle') {
       mesh.visible = false

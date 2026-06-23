@@ -48,5 +48,7 @@ export { default as GantryRobot,
          DEFAULT_TRAVEL_X, DEFAULT_TRAVEL_Z } from './gantry/GantryRobot.jsx'
 export { default as GantryAnimationController } from './gantry/GantryAnimationController.jsx'
 export { default as useGantryStore,
+         createGantryStore,
          RAIL_Y, TRAVEL_Y, HOME_POSE as GANTRY_HOME_POSE }
   from './gantry/useGantryStore.js'
+export { GantryStoreProvider, useGantryRobotStore } from './gantry/gantryContext.jsx'

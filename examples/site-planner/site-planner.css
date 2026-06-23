@@ -100,7 +100,25 @@
 }
 .view-icon { font-size: 10px; }
 
+/* ── Builder (robot-type) bar ─────────────────────────────── */
+.builder-bar {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.builder-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
 /* ── Simulation bar ───────────────────────────────────────── */
+.sim-run.done { background: #10b981; border-color: #10b981; }
+.sim-done-tag { color: #10b981 !important; }
 .sim-bar {
   padding: 10px 16px;
   border-bottom: 1px solid var(--rule-soft);

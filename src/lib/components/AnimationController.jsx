@@ -436,20 +436,25 @@ export default function AnimationController() {
     progressRef.current = Math.min(1, progressRef.current + delta / duration)
     const t = easeInOutCubic(progressRef.current)
 
-    useStore.setState({ animProgress: progressRef.current })
+    // Collect this frame's changes into ONE store write.  Three separate
+    // setState calls per robot per frame meant three zustand notify passes
+    // every frame for every arm — batching them into a single update cuts that
+    // overhead by 3× and is a big part of keeping a multi-robot run smooth.
+    const patch = { animProgress: progressRef.current }
 
     if (fromAngles && toAngles && robotRef) {
       const interp = lerpAngles(fromAngles, toAngles, t)
       applyAnglesToRobot(robotRef, interp)
-      useStore.setState({ jointAngles: { ...interp } })
+      patch.jointAngles = { ...interp }
     }
     if (mobileMode && fromPlatform && toPlatform) {
       const path = platformPath && platformPath.length >= 2
         ? platformPath
         : [fromPlatform.position, toPlatform.position]
-      const ip = poseAlongPath(path, fromPlatform.rotation, toPlatform.rotation, t)
-      useStore.setState({ platformPose: ip })
+      patch.platformPose = poseAlongPath(path, fromPlatform.rotation, toPlatform.rotation, t)
     }
+
+    useStore.setState(patch)
 
     if (progressRef.current >= 1) {
       _onSegmentComplete(useStore, store, animState)

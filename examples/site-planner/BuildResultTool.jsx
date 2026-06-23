@@ -46,9 +46,35 @@ export default function BuildResultTool({ active, grids, gridSizeCm, buildCubes,
 
   const hRef = useRef()
   const vRef = useRef()
+  const fillRef = useRef()
+  const wireRef = useRef()
 
   const plusLen = Math.max(0.12, unit * 0.4)
   const plusThick = Math.max(0.04, unit * 0.07)
+
+  // Draw every placed cube with two instanced meshes (a faint fill + a
+  // wireframe) instead of two THREE meshes per cube.  A tall build is hundreds
+  // of cubes; collapsing them into two draw calls is what keeps the viewport
+  // (and the box-moving animation on top of it) smooth.
+  useEffect(() => {
+    const fill = fillRef.current
+    const wire = wireRef.current
+    if (!fill || !wire) return
+    const n = Math.min(buildCubes.length, MAX_CELLS)
+    for (let i = 0; i < n; i++) {
+      const cube = buildCubes[i]
+      _dummy.position.set(cube.x, cube.layer * unit + unit / 2, cube.z)
+      _dummy.rotation.set(0, 0, 0)
+      _dummy.scale.set(1, 1, 1)
+      _dummy.updateMatrix()
+      fill.setMatrixAt(i, _dummy.matrix)
+      wire.setMatrixAt(i, _dummy.matrix)
+    }
+    fill.count = n
+    wire.count = n
+    fill.instanceMatrix.needsUpdate = true
+    wire.instanceMatrix.needsUpdate = true
+  }, [buildCubes, unit])
 
   useEffect(() => {
     if (!hRef.current || !vRef.current) return
@@ -99,24 +125,38 @@ export default function BuildResultTool({ active, grids, gridSizeCm, buildCubes,
         </>
       )}
 
-      {/* Placed cubes — always visible, buttons only in edit mode */}
-      {buildCubes.map((cube) => {
+      {/* Placed cubes — drawn as two instanced meshes (fill + wireframe). */}
+      {buildCubes.length > 0 && (
+        <>
+          <instancedMesh
+            key={`fill-${buildCubes.length}`}
+            ref={fillRef}
+            args={[undefined, undefined, Math.min(buildCubes.length, MAX_CELLS)]}
+            frustumCulled={false}
+          >
+            <boxGeometry args={[s, s, s]} />
+            <meshStandardMaterial color="#3b6fff" transparent opacity={0.2} depthWrite={false} />
+          </instancedMesh>
+          <instancedMesh
+            key={`wire-${buildCubes.length}`}
+            ref={wireRef}
+            args={[undefined, undefined, Math.min(buildCubes.length, MAX_CELLS)]}
+            frustumCulled={false}
+          >
+            <boxGeometry args={[s, s, s]} />
+            <meshStandardMaterial color="#3b82f6" wireframe />
+          </instancedMesh>
+        </>
+      )}
+
+      {/* Edit-mode +/− buttons — only while editing (never during a run), so
+          the per-cube DOM overlays don't cost anything during simulation. */}
+      {active && buildCubes.map((cube) => {
         const y = cube.layer * unit + unit / 2
         const isTop = !occupiedKey.has(`${cube.x}:${cube.z}:${cube.layer + 1}`)
         return (
           <group key={cube.id} position={[cube.x, y, cube.z]}>
-            {/* Transparent fill */}
-            <mesh>
-              <boxGeometry args={[s, s, s]} />
-              <meshStandardMaterial color="#3b6fff" transparent opacity={0.2} depthWrite={false} />
-            </mesh>
-            {/* Wireframe outline */}
-            <mesh>
-              <boxGeometry args={[s, s, s]} />
-              <meshStandardMaterial color="#3b82f6" wireframe />
-            </mesh>
-            {/* + button: add a cube on top (only on topmost cube of a stack) */}
-            {active && isTop && (
+            {isTop && (
               <Html position={[0, s / 2 + 0.04, 0]} center zIndexRange={[200, 0]}>
                 <button
                   className="build-btn build-add"
@@ -124,15 +164,12 @@ export default function BuildResultTool({ active, grids, gridSizeCm, buildCubes,
                 >+</button>
               </Html>
             )}
-            {/* − button: remove this cube (top-right corner) */}
-            {active && (
-              <Html position={[s * 0.52, s * 0.52, -s * 0.52]} center zIndexRange={[200, 0]}>
-                <button
-                  className="build-btn build-del"
-                  onPointerDown={(e) => { e.stopPropagation(); onRemoveCube(cube.id) }}
-                >−</button>
-              </Html>
-            )}
+            <Html position={[s * 0.52, s * 0.52, -s * 0.52]} center zIndexRange={[200, 0]}>
+              <button
+                className="build-btn build-del"
+                onPointerDown={(e) => { e.stopPropagation(); onRemoveCube(cube.id) }}
+              >−</button>
+            </Html>
           </group>
         )
       })}

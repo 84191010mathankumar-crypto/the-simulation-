@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import useGantryStore, { TRAVEL_Y, HOME_POSE } from './useGantryStore'
+import { TRAVEL_Y, HOME_POSE } from './useGantryStore'
+import { useGantryRobotStore } from './gantryContext'
 import { easeInOutCubic } from '../ik/ikSolver'
 
 // Seconds per motion segment. The full sequence is:
@@ -49,9 +50,10 @@ export default function GantryAnimationController() {
   const progressRef  = useRef(0)
   const prevStateRef = useRef('idle')
   const segmentRef    = useRef({ from: { ...HOME_POSE }, to: { ...HOME_POSE } })
+  const useStore = useGantryRobotStore()
 
   useFrame((_, delta) => {
-    const store = useGantryStore.getState()
+    const store = useStore.getState()
     const { animState, pose, startObject, endObject } = store
 
     if (animState === 'idle') {
@@ -64,7 +66,7 @@ export default function GantryAnimationController() {
     if (prevStateRef.current !== animState) {
       prevStateRef.current = animState
       progressRef.current = 0
-      useGantryStore.setState({ animProgress: 0 })
+      useStore.setState({ animProgress: 0 })
 
       const from = { ...pose }
       let to = { ...pose }
@@ -79,7 +81,7 @@ export default function GantryAnimationController() {
           store.addLog('info', 'Descending to pick height…')
           break
         case 'grabbing':
-          useGantryStore.setState({ gripperOpen: false, carrying: true })
+          useStore.setState({ gripperOpen: false, carrying: true })
           store.addLog('ok', '✓ Object grabbed')
           break
         case 'ascending_pick':
@@ -99,7 +101,7 @@ export default function GantryAnimationController() {
           store.addLog('info', 'Descending to place height…')
           break
         case 'releasing':
-          useGantryStore.setState({ gripperOpen: true, carrying: false })
+          useStore.setState({ gripperOpen: true, carrying: false })
           store.addLog('ok', '✓ Object released')
           break
         case 'ascending_place':
@@ -121,15 +123,15 @@ export default function GantryAnimationController() {
     const duration = SPEED[animState] || 0.6
     progressRef.current = Math.min(1, progressRef.current + delta / duration)
     const t = easeInOutCubic(progressRef.current)
-    useGantryStore.setState({ animProgress: progressRef.current })
 
+    // Single batched write per frame (pose + progress) — one notify pass.
     const { from, to } = segmentRef.current
-    useGantryStore.setState({ pose: lerpPose(from, to, t) })
+    useStore.setState({ animProgress: progressRef.current, pose: lerpPose(from, to, t) })
 
     if (progressRef.current >= 1) {
       const next = SEQUENCE[animState] || 'idle'
       if (animState === 'returning') store.addLog('ok', '✓ HOME — sequence complete')
-      useGantryStore.setState({ animState: next })
+      useStore.setState({ animState: next })
     }
   })
 

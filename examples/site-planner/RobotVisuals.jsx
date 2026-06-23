@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { sourceKey } from './simulation'
 
 const steel  = { color: '#2b2d31', metalness: 0.55, roughness: 0.4 }
 const accent = { color: '#ff6000', metalness: 0.3, roughness: 0.5 }
@@ -105,43 +106,78 @@ export function GridAreaVisual({ rect, gridSizeCm = 100 }) {
 }
 
 const STACK_LAYERS = 3
+const _dummy = new THREE.Object3D()
 
-/** Stacked unit cubes (x=y=z=unit) filling a storage area. */
-export function StorageVisual({ rect, gridSizeCm = 60 }) {
-  const boxes = useMemo(() => {
+/**
+ * Stacked unit cubes (x=y=z=unit) filling a storage area.
+ *
+ * Rendered as a single instanced mesh — a full storage area can hold up to
+ * 14×14×3 ≈ 588 cubes, and one instanced draw call instead of ~600 separate
+ * meshes is what keeps the site (and, by the same token, the warehouse) from
+ * crawling once a few storage areas are on the floor.
+ *
+ * `hiddenKeys` (a Set of sourceKey()s) lists storage cubes that have been
+ * handed to the simulation — i.e. they're now represented by a moving SimBox,
+ * so we skip them here.  As the arms/gantries carry those boxes off, the pile
+ * visibly depletes instead of staying eternally full.
+ */
+export function StorageVisual({ rect, gridSizeCm = 60, hiddenKeys = null }) {
+  const { positions, side } = useMemo(() => {
     const unit = gridSizeCm / 100
-    const side = unit * 0.88   // slight gap between cubes, same on all axes
+    const sd = unit * 0.88   // slight gap between cubes, same on all axes
     const w = rect.maxX - rect.minX
     const d = rect.maxZ - rect.minZ
     const cols = Math.min(14, Math.max(1, Math.floor(w / unit)))
     const rows = Math.min(14, Math.max(1, Math.floor(d / unit)))
     const stepX = w / cols
     const stepZ = d / rows
-    const result = []
+    const out = []
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r < rows; r++) {
         for (let h = 0; h < STACK_LAYERS; h++) {
-          result.push({
-            key: `${c}-${r}-${h}`,
-            x: rect.minX + (c + 0.5) * stepX,
-            y: (h + 0.5) * unit + 0.02,
-            z: rect.minZ + (r + 0.5) * stepZ,
-            side,
-          })
+          out.push([
+            rect.minX + (c + 0.5) * stepX,
+            (h + 0.5) * unit + 0.02,
+            rect.minZ + (r + 0.5) * stepZ,
+          ])
         }
       }
     }
-    return result
+    return { positions: out, side: sd }
   }, [rect.minX, rect.maxX, rect.minZ, rect.maxZ, gridSizeCm])
 
+  const visible = useMemo(
+    () => (hiddenKeys && hiddenKeys.size ? positions.filter((p) => !hiddenKeys.has(sourceKey(p))) : positions),
+    [positions, hiddenKeys]
+  )
+
+  const ref = useRef()
+  useEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    for (let i = 0; i < visible.length; i++) {
+      _dummy.position.set(visible[i][0], visible[i][1], visible[i][2])
+      _dummy.rotation.set(0, 0, 0)
+      _dummy.scale.set(1, 1, 1)
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(i, _dummy.matrix)
+    }
+    mesh.count = visible.length
+    mesh.instanceMatrix.needsUpdate = true
+  }, [visible])
+
+  if (positions.length === 0) return null
+
   return (
-    <group>
-      {boxes.map(({ key, x, y, z, side }) => (
-        <mesh key={key} position={[x, y, z]}>
-          <boxGeometry args={[side, side, side]} />
-          <meshStandardMaterial color="#92400e" metalness={0.05} roughness={0.88} />
-        </mesh>
-      ))}
-    </group>
+    <instancedMesh
+      key={positions.length}
+      ref={ref}
+      args={[undefined, undefined, positions.length]}
+      castShadow
+      receiveShadow
+    >
+      <boxGeometry args={[side, side, side]} />
+      <meshStandardMaterial color="#92400e" metalness={0.05} roughness={0.88} />
+    </instancedMesh>
   )
 }
