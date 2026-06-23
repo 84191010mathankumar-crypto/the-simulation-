@@ -29,9 +29,24 @@ function yawOf(rot) {
   return (rot && rot.length >= 2) ? rot[1] : 0
 }
 
-export function createGantryScheduler({ boxes, onLog }) {
+/**
+ * Create a gantry scheduler.
+ *
+ *   boxes  — tasks, same shape as the arm scheduler's boxes.
+ *   onLog  — optional logger.
+ *   store  — the gantry's zustand store (default: lib singleton).  Pass a
+ *            per-instance store from createGantryStore() to run several
+ *            gantries in parallel.
+ *   origin — [cx, cz] world position of the gantry's frame.  The gantry's
+ *            pose lives in this frame (HOME = local 0,0), so world box
+ *            positions are converted to local for the store, and the gantry
+ *            pose is converted back to world when parking carried meshes.
+ *            Defaults to [0, 0] (the warehouse's floor-spanning gantry).
+ */
+export function createGantryScheduler({ boxes, onLog, store = useGantryStore, origin = [0, 0] }) {
   const log = onLog || (() => {})
-  const store = useGantryStore
+  const [ox, oz] = origin
+  const toLocal = (p) => [p[0] - ox, p[1], p[2] - oz]
 
   const tasks = boxes.map((b) => ({
     box: b,
@@ -90,7 +105,7 @@ export function createGantryScheduler({ boxes, onLog }) {
     if (minPriority === Infinity) return null
 
     const pose = store.getState().pose
-    const here = [pose.x, 0, pose.z]
+    const here = [pose.x + ox, 0, pose.z + oz]
     let best = null, bestD = Infinity
     for (const t of tasks) {
       if (t.state !== 'pending') continue
@@ -108,8 +123,8 @@ export function createGantryScheduler({ boxes, onLog }) {
     // drive — the AnimationController descends `pose.y` to `position[1]`.  Since
     // the gantry grabs from the TOP, that target y is the box's top face, i.e.
     // the recorded centre y plus half the box height.
-    const [sx, sy, sz] = task.currentWorld
-    const [tx, ty, tz] = task.box.to
+    const [sx, sy, sz] = toLocal(task.currentWorld)
+    const [tx, ty, tz] = toLocal(task.box.to)
     store.setState({
       startObject: {
         position: [sx, sy + task.halfH, sz],
@@ -152,7 +167,8 @@ export function createGantryScheduler({ boxes, onLog }) {
     if (carrying) {
       // Gripper has the box by its top face — the box hangs below the
       // fingertip, so its centre is one half-height down from `pose.y`.
-      mesh.position.set(pose.x, pose.y - current.halfH, pose.z)
+      // pose is in the gantry's local frame; shift it back into world space.
+      mesh.position.set(pose.x + ox, pose.y - current.halfH, pose.z + oz)
       mesh.rotation.set(0, pose.rotY, 0)
       return
     }

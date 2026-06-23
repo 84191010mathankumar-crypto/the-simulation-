@@ -1,6 +1,7 @@
 import React, { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import useGantryStore, { RAIL_Y } from './useGantryStore'
+import { RAIL_Y } from './useGantryStore'
+import { useGantryRobotStore } from './gantryContext'
 
 // Default frame footprint — how far the rails/bridge reach in each direction.
 // Can be overridden via <GantryRobot travelX=.. travelZ=.. /> to span a larger
@@ -114,9 +115,10 @@ export default function GantryRobot({ travelX = DEFAULT_TRAVEL_X, travelZ = DEFA
   const leftFingerRef  = useRef()
   const rightFingerRef = useRef()
   const fingerOffsetRef = useRef(0.05)
+  const useStore = useGantryRobotStore()
 
   useFrame((_, delta) => {
-    const { pose, gripperOpen } = useGantryStore.getState()
+    const { pose, gripperOpen } = useStore.getState()
     if (bridgeRef.current)  bridgeRef.current.position.x = pose.x
     if (trolleyRef.current) trolleyRef.current.position.z = pose.z
 

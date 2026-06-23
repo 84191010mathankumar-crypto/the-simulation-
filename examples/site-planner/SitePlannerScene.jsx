@@ -2,7 +2,10 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, GizmoHelper, GizmoViewport, useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
-import { AnimationController, RobotStoreProvider } from 'robo-playground'
+import {
+  AnimationController, RobotStoreProvider,
+  GantryRobot, GantryAnimationController, GantryStoreProvider,
+} from 'robo-playground'
 import RectTool from './RectTool'
 import PointTool from './PointTool'
 import BuildResultTool from './BuildResultTool'
@@ -12,14 +15,17 @@ import { GantryRobotVisual, GridAreaVisual, StorageVisual } from './RobotVisuals
 
 const ROBOT_COLORS = ['#ff6000','#3b82f6','#10b981','#a855f7','#f43f5e','#eab308','#06b6d4','#fb7185','#84cc16']
 
-/* Headless — ticks the warehouse scheduler each frame while simulating. */
-function SchedulerTick({ scheduler }) {
-  useFrame(() => { scheduler.tick() })
+/* Headless — ticks every active scheduler (arm fleet + gantries) each frame. */
+function SchedulerTick({ schedulers }) {
+  useFrame(() => { for (const s of schedulers) s.tick() })
   return null
 }
 
-/* Mobile arms + carried boxes that run the build during simulation. */
-function Simulation({ robots, boxes, scheduler, registerMeshRef }) {
+/* Mobile arms, overhead gantries, and the carried boxes that run the build
+ * during simulation.  Arms and gantries each have their own store + scheduler,
+ * so they execute in parallel; every box mesh is shared and driven by whichever
+ * scheduler owns it. */
+function Simulation({ robots, gantryInstances, boxes, schedulers, registerMeshRef }) {
   return (
     <Suspense fallback={null}>
       {robots.map((r, i) => (
@@ -28,8 +34,16 @@ function Simulation({ robots, boxes, scheduler, registerMeshRef }) {
           <AnimationController />
         </RobotStoreProvider>
       ))}
+      {gantryInstances.map((g) => (
+        <GantryStoreProvider key={g.id} store={g.store}>
+          <group position={[g.origin[0], 0, g.origin[1]]}>
+            <GantryRobot travelX={g.travelX} travelZ={g.travelZ} />
+          </group>
+          <GantryAnimationController />
+        </GantryStoreProvider>
+      ))}
       {boxes.map((b) => <SimBox key={b.id} box={b} registerMeshRef={registerMeshRef} />)}
-      <SchedulerTick scheduler={scheduler} />
+      <SchedulerTick schedulers={schedulers} />
     </Suspense>
   )
 }
@@ -86,7 +100,8 @@ export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
   selectedId, showModel = true, gridSizeCm = 100, isArmValid,
-  simulating, simRobots, simBoxes, simScheduler, registerSimMeshRef,
+  simulating, simRobots, simBoxes, gantryInstances = [], activeGantryIds,
+  consumedSourceKeys, schedulers = [], registerSimMeshRef,
   onCreateGantry, onSelectGantry, onUpdateGantry, onDeleteGantry,
   onCreateArm, onSelectArm, onUpdateArm,
   onCreateGrid, onSelectGrid, onUpdateGrid, onDeleteGrid,
@@ -142,7 +157,11 @@ export default function SitePlannerScene({
             groundSize={groundSize}
             selectable={!activeTool}
             outlineOnly
-            renderRobot={(rect) => <GantryRobotVisual rect={rect} />}
+            renderRobot={(rect) => (
+              simulating && activeGantryIds && activeGantryIds.has(rect.id)
+                ? null
+                : <GantryRobotVisual rect={rect} />
+            )}
             onCreate={onCreateGantry}
             onSelect={onSelectGantry}
             onUpdate={onUpdateGantry}
@@ -196,7 +215,13 @@ export default function SitePlannerScene({
             groundSize={groundSize}
             selectable={!activeTool}
             outlineOnly
-            renderRobot={(rect) => <StorageVisual rect={rect} gridSizeCm={gridSizeCm} />}
+            renderRobot={(rect) => (
+              <StorageVisual
+                rect={rect}
+                gridSizeCm={gridSizeCm}
+                hiddenKeys={simulating ? consumedSourceKeys : null}
+              />
+            )}
             onCreate={onCreateStorage}
             onSelect={onSelectStorage}
             onUpdate={onUpdateStorage}
@@ -210,8 +235,9 @@ export default function SitePlannerScene({
           {simulating ? (
             <Simulation
               robots={simRobots}
+              gantryInstances={gantryInstances}
               boxes={simBoxes}
-              scheduler={simScheduler}
+              schedulers={schedulers}
               registerMeshRef={registerSimMeshRef}
             />
           ) : (

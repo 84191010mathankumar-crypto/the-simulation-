@@ -27,8 +27,10 @@ export default function SimBox({ box, registerMeshRef }) {
   return (
     <mesh ref={ref} castShadow receiveShadow>
       <boxGeometry args={box.size} />
-      <meshStandardMaterial color="#c9a227" metalness={0.05} roughness={0.8} />
-      <Edges color="#5b4708" threshold={12} lineWidth={1} />
+      {/* Match the brown storage cubes so a box picked from the pile looks
+          like the same physical box being relocated to its build target. */}
+      <meshStandardMaterial color="#92400e" metalness={0.05} roughness={0.85} />
+      <Edges color="#3f1d07" threshold={12} lineWidth={1} />
     </mesh>
   )
 }

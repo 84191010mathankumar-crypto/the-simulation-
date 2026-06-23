@@ -58,6 +58,45 @@ function ToolSection({ num, title, hint, activatingLabel, active, onToggle, item
   )
 }
 
+/* Explains, in gantry mode, how boxes were routed between the gantries and the
+ * arm-fleet fallback. */
+function GantryRouting({ assignment, armCount, gantryCount }) {
+  const { gantryBoxes, armBoxes, gantriesWithoutStorage = [] } = assignment
+
+  if (gantryCount === 0) {
+    return (
+      <div className="sim-warning">
+        <strong>⚠ No gantry areas</strong>
+        <span>Draw a gantry area (section 01) so it can place boxes, or switch the builder back to Robo arms.</span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {gantryBoxes > 0 && (
+        <div className="sim-ok">✓ {gantryBoxes} box{gantryBoxes === 1 ? '' : 'es'} routed to gantries</div>
+      )}
+      {armBoxes > 0 && (
+        <div className="sim-warning">
+          <strong>⚠ {armBoxes} box{armBoxes === 1 ? '' : 'es'} out of gantry reach</strong>
+          {gantriesWithoutStorage.length > 0 && (
+            <span>
+              {gantriesWithoutStorage.length === 1 ? 'A gantry has' : `${gantriesWithoutStorage.length} gantries have`}
+              {' '}targets but no storage inside their area.
+            </span>
+          )}
+          <span>
+            {armCount > 0
+              ? 'These boxes will be built by the robo arms instead.'
+              : "No robo arms are placed, so these boxes won't be built. Add a robo arm, or add storage inside the gantry areas."}
+          </span>
+        </div>
+      )}
+    </>
+  )
+}
+
 function JsonSection({ config, loadStatus, onReload }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -104,7 +143,8 @@ export default function Panel({
   onSelectStorage, onDeleteStorage,
   showModel, onToggleModel,
   config, loadStatus, onReload,
-  simulating, onStartSim, onStopSim, simStats, simProgress, armCount,
+  simulating, simDone, onStartSim, onStopSim, simStats, simProgress, armCount,
+  gantryCount = 0, robotType = 'arms', setRobotType,
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -113,8 +153,11 @@ export default function Panel({
     setActiveTool((cur) => (cur === tool ? null : tool))
   }
 
+  const isGantry = robotType === 'gantry'
   const missing = simStats?.missing ?? 0
-  const canSimulate = armCount > 0 && (simStats?.needed ?? 0) > 0
+  const needed = simStats?.needed ?? 0
+  const canSimulate = needed > 0 && (isGantry ? (gantryCount > 0 || armCount > 0) : armCount > 0)
+  const assignment = simStats?.assignment
   const storageWarning = missing > 0 ? (
     <div className="sim-warning">
       <strong>⚠ {missing} box{missing === 1 ? '' : 'es'} short.</strong>
@@ -159,25 +202,71 @@ export default function Panel({
           </button>
         </div>
 
-        {/* Simulation — run the arms to build the pattern */}
-        <div className="sim-bar">
-          <button
-            className={`sim-run${simulating ? ' running' : ''}`}
-            onClick={simulating ? onStopSim : onStartSim}
-            disabled={!simulating && !canSimulate}
-            title={
-              armCount === 0 ? 'Place at least one robo arm first'
-                : (simStats?.needed ?? 0) === 0 ? 'Add build-result boxes first'
-                : simulating ? 'Stop the simulation' : 'Run the build simulation'
-            }
-          >
-            {simulating ? '■ Stop' : '▶ Build'}
-          </button>
-          <div className="sim-stats">
-            {simulating
-              ? <><b>{simProgress.done}</b> / {simStats.boxes.length} placed</>
-              : <>{armCount} arm{armCount === 1 ? '' : 's'} · {simStats?.needed ?? 0} boxes to build</>}
+        {/* Builder — choose which robot type places the boxes */}
+        <div className="builder-bar">
+          <div className="builder-label">Builder</div>
+          <div className="segmented" role="tablist">
+            <button
+              role="tab"
+              aria-selected={!isGantry}
+              className={`seg-btn ${!isGantry ? 'active' : ''}`}
+              disabled={simulating}
+              onClick={() => setRobotType && setRobotType('arms')}
+            >
+              Robo arms
+            </button>
+            <button
+              role="tab"
+              aria-selected={isGantry}
+              className={`seg-btn ${isGantry ? 'active' : ''}`}
+              disabled={simulating}
+              onClick={() => setRobotType && setRobotType('gantry')}
+            >
+              Gantry robots
+            </button>
           </div>
+          <div className="robot-type-note">
+            {isGantry
+              ? 'Each box is placed by a gantry whose area covers both its storage and its target. Boxes no gantry can reach fall back to the robo arms.'
+              : 'Mobile arms on AGVs fetch boxes from storage and build the pattern, nearest-first.'}
+          </div>
+          {isGantry && assignment && (
+            <GantryRouting assignment={assignment} armCount={armCount} gantryCount={gantryCount} />
+          )}
+        </div>
+
+        {/* Simulation — run the chosen robots to build the pattern */}
+        <div className="sim-bar">
+          {simulating && simDone ? (
+            <>
+              <button className="sim-run done" onClick={onStopSim} title="Clear the build and reset">
+                ↺ Reset
+              </button>
+              <div className="sim-stats"><b className="sim-done-tag">✓ Done</b> · {simStats.boxes.length} placed</div>
+            </>
+          ) : (
+            <>
+              <button
+                className={`sim-run${simulating ? ' running' : ''}`}
+                onClick={simulating ? onStopSim : onStartSim}
+                disabled={!simulating && !canSimulate}
+                title={
+                  !canSimulate && !simulating
+                    ? (needed === 0 ? 'Add build-result boxes first'
+                        : isGantry ? 'Add a gantry area (or a robo arm) first'
+                        : 'Place at least one robo arm first')
+                    : simulating ? 'Stop the simulation' : 'Run the build simulation'
+                }
+              >
+                {simulating ? '■ Stop' : '▶ Build'}
+              </button>
+              <div className="sim-stats">
+                {simulating
+                  ? <><b>{simProgress.done}</b> / {simStats.boxes.length} placed</>
+                  : <>{needed} box{needed === 1 ? '' : 'es'} to build</>}
+              </div>
+            </>
+          )}
         </div>
         {missing > 0 && (
           <div className="sim-bar-warning">⚠ {missing} box{missing === 1 ? '' : 'es'} short — see Storage</div>
