@@ -70,6 +70,20 @@ function snapToGrid(v) {
   return Math.round(v / GRID_CELL) * GRID_CELL
 }
 
+/* Snaps `v` to a grid line, but biased towards `other` instead of to the
+ * NEAREST line.  Plain nearest-rounding is what caused the "robot hops
+ * backward then forward" glitch: if a coordinate's fractional part was
+ * just past the halfway mark in the "wrong" direction, snapToGrid would
+ * round it behind where it started, so the very first hop of the trip
+ * briefly went backwards before the rest of the path corrected forward.
+ * Rounding towards `other` instead guarantees the snapped value always
+ * lies between v and other — i.e. the hop is always progress, never a
+ * step back. */
+function snapBiased(v, other) {
+  if (Math.abs(other - v) < 1e-9) return snapToGrid(v)
+  return other > v ? Math.ceil(v / GRID_CELL) * GRID_CELL : Math.floor(v / GRID_CELL) * GRID_CELL
+}
+
 /* Does the segment p0→p1 (2D, [x,z]) cross the zone's rectangle, expanded
  * by `margin` on every side?  Standard slab/AABB segment test. */
 function segmentHitsZone(p0, p1, zone, margin) {
@@ -220,8 +234,11 @@ function gridSnapPath(waypoints) {
   for (let i = 0; i < waypoints.length - 1; i++) {
     const a = waypoints[i], b = waypoints[i + 1]
     const y = a[1]
-    const aSnap = [snapToGrid(a[0]), y, snapToGrid(a[2])]
-    const bSnap = [snapToGrid(b[0]), y, snapToGrid(b[2])]
+    // Bias both snaps towards the OTHER end of the leg, not to the nearest
+    // line — keeps aSnap strictly ahead of a and bSnap strictly behind b
+    // (along the travel direction), so neither hookup ever backtracks.
+    const aSnap = [snapBiased(a[0], b[0]), y, snapBiased(a[2], b[2])]
+    const bSnap = [snapBiased(b[0], a[0]), y, snapBiased(b[2], a[2])]
     const bend  = [bSnap[0], y, aSnap[2]]
     push(aSnap); push(bend); push(bSnap); push(b)
   }

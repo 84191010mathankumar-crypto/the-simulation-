@@ -10,10 +10,14 @@ import React from 'react'
 export default function Nav() {
   const base = import.meta.env.BASE_URL || '/'
   const path = typeof window !== 'undefined' ? window.location.pathname : '/'
-  const current = path.includes('/examples/warehouse') ? 'warehouse' : 'arm'
+  const current = path.includes('/examples/warehouse')
+    ? 'warehouse'
+    : path.includes('/examples/gantry')
+      ? 'gantry'
+      : 'arm'
 
   return (
-    <nav className="page-nav" aria-label="Demos">
+    <nav className="page-nav page-nav-3" aria-label="Demos">
       <a
         href={base}
         className={`pn-tab ${current === 'arm' ? 'active' : ''}`}
@@ -26,6 +30,19 @@ export default function Nav() {
           <rect x="16" y="9" width="4" height="3" />
         </svg>
         <span>Single arm</span>
+      </a>
+      <a
+        href={`${base}examples/gantry/`}
+        className={`pn-tab ${current === 'gantry' ? 'active' : ''}`}
+        aria-current={current === 'gantry' ? 'page' : undefined}
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square">
+          <path d="M3 6 H21" />
+          <path d="M6 6 V19" />
+          <path d="M18 6 V19" />
+          <rect x="10" y="13" width="4" height="4" />
+        </svg>
+        <span>Gantry</span>
       </a>
       <a
         href={`${base}examples/warehouse/`}

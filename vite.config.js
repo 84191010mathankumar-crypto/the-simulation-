@@ -5,13 +5,14 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
-// Single Vite project, two HTML entries:
+// Single Vite project, three HTML entries:
 //   /                       → arm demo (index.html)
+//   /examples/gantry/       → gantry robot demo (examples/gantry/index.html)
 //   /examples/warehouse/    → multi-robot stub (examples/warehouse/index.html)
 //
-// `npm run dev` starts ONE server that serves both pages.  Vite auto-serves
-// any .html file by path, so the rollupOptions.input below is only needed
-// so production `npm run build` emits both bundles.
+// `npm run dev` starts ONE server that serves all three pages.  Vite
+// auto-serves any .html file by path, so the rollupOptions.input below is
+// only needed so production `npm run build` emits all three bundles.
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/robo-playground/' : '/',
   plugins: [react()],
@@ -26,6 +27,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(here, 'index.html'),
+        gantry: path.resolve(here, 'examples/gantry/index.html'),
         warehouse: path.resolve(here, 'examples/warehouse/index.html'),
       },
     },
