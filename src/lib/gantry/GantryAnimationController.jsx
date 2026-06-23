@@ -71,7 +71,7 @@ export default function GantryAnimationController() {
 
       switch (animState) {
         case 'moving_to_start':
-          to = { x: startObject.position[0], y: TRAVEL_Y, z: startObject.position[2], rotY: 0 }
+          to = { x: startObject.position[0], y: TRAVEL_Y, z: startObject.position[2], rotY: startObject.rotY }
           store.addLog('info', 'Moving to START position…')
           break
         case 'descending_pick':
