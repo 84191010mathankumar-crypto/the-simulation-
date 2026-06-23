@@ -6,7 +6,7 @@
  * Shared materials across all clones keep GPU memory low.
  * No store/context required — display-only.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import * as THREE from 'three'
 import URDFLoader from 'urdf-loader'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -89,36 +89,33 @@ function getTemplate() {
  * `highlight` — raises ring opacity when the arm is selected in the panel.
  */
 export default function PlacedKukaArm({ x, z, valid = true, highlight = false }) {
-  const groupRef = useRef()
+  const [clone, setClone] = useState(null)
 
   useEffect(() => {
-    const group = groupRef.current
-    if (!group) return
-    let clone = null
     let cancelled = false
 
     getTemplate()
       .then((template) => {
-        if (cancelled || !groupRef.current) return
-        // Deep-clone the pre-posed hierarchy. Shared geometries + materials.
-        clone = template.clone(true)
+        if (cancelled) return
+        const c = template.clone(true)
         // URDF is ROS Z-up; rotate to Three.js Y-up, then lift onto pedestal.
-        clone.rotation.set(-Math.PI / 2, 0, 0)
-        clone.position.set(0, 0.05, 0)
-        groupRef.current.add(clone)
+        c.rotation.set(-Math.PI / 2, 0, 0)
+        c.position.set(0, 0.05, 0)
+        setClone(c)
       })
       .catch(() => {})
 
     return () => {
       cancelled = true
-      if (clone && groupRef.current) groupRef.current.remove(clone)
+      setClone(null)
     }
   }, [])
 
   const ringColor = valid ? '#10b981' : '#dc2626'
 
   return (
-    <group ref={groupRef} position={[x, 0, z]}>
+    <group position={[x, 0, z]}>
+      {clone && <primitive object={clone} />}
       {/* Validity ring — green = on-grid & clear of restricted zones, red = invalid */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
         <ringGeometry args={[0.35, 0.55, 32]} />

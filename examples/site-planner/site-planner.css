@@ -312,6 +312,37 @@
   box-sizing: border-box;
 }
 
+/* ── Build result 3D buttons ─────────────────────────────────── */
+.build-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s;
+  pointer-events: all;
+}
+.build-btn:hover { transform: scale(1.2); }
+.build-add {
+  width: 20px;
+  height: 20px;
+  background: #3b6fff;
+  color: #fff;
+  font-size: 15px;
+}
+.build-del {
+  width: 16px;
+  height: 16px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 13px;
+}
+
 /* ── Floating HUD chip (copied from the single-arm demo) ──────── */
 .scene-hud {
   position: absolute;

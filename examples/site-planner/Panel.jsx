@@ -8,7 +8,7 @@ const STATUS_HINT = {
   error:   "Couldn't read public/site-config.json — paste the JSON there to auto-load next time",
 }
 
-function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel, children }) {
+function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel, children, addIcon = '+', addTitle = 'Add' }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => { if (active) setOpen(true) }, [active])
@@ -21,10 +21,10 @@ function ToolSection({ num, title, hint, activatingLabel, active, onToggle, item
         {!open && items.length > 0 && <span className="sec-count">{items.length}</span>}
         <button
           className={`sec-add${active ? ' active-tool' : ''}`}
-          title={active ? activatingLabel : 'Add'}
+          title={active ? 'Cancel' : addTitle}
           onClick={(e) => { e.stopPropagation(); onToggle() }}
         >
-          {active ? '×' : '+'}
+          {active ? '×' : addIcon}
         </button>
         <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
@@ -73,7 +73,7 @@ function JsonSection({ config, loadStatus, onReload }) {
   return (
     <section className={`section${open ? ' sec-open' : ''}`}>
       <div className="section-head" onClick={() => setOpen((v) => !v)}>
-        <span className="sec-num">06</span>
+        <span className="sec-num">07</span>
         <span className="sec-title">Config JSON</span>
         <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
@@ -93,6 +93,7 @@ function JsonSection({ config, loadStatus, onReload }) {
 
 export default function Panel({
   gantries, arms, grids, zones, storageAreas,
+  buildCubes, onRemoveBuildCube,
   gridSizeCm, onChangeGridSize,
   activeTool, setActiveTool,
   selectedId,
@@ -231,11 +232,27 @@ export default function Panel({
           renderLabel={(it, i) => `Storage ${i + 1}`}
         />
 
+        <ToolSection
+          num="06"
+          title="Build result"
+          hint="Visualize what needs to be built. In edit mode, click a + icon on the grid to place a box. Stack boxes by clicking the + on top of a placed box."
+          activatingLabel="Click + on grid to place a box…"
+          active={activeTool === 'build'}
+          onToggle={() => toggleTool('build')}
+          addIcon="✎"
+          addTitle="Edit build result"
+          items={buildCubes}
+          selectedId={null}
+          onSelectItem={() => {}}
+          onDeleteItem={onRemoveBuildCube}
+          renderLabel={(it, i) => `Box ${i + 1} · layer ${it.layer + 1}`}
+        />
+
         <JsonSection config={config} loadStatus={loadStatus} onReload={onReload} />
       </div>
 
       <div className="colophon">
-        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage</span>
+        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage · {buildCubes.length} boxes</span>
         <span className="kbd">⌘</span>
       </div>
     </aside>

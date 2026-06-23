@@ -19,13 +19,14 @@ function App() {
   const [grids, setGrids]             = useState([])
   const [zones, setZones]             = useState([])
   const [storageAreas, setStorage]    = useState([])
+  const [buildCubes, setBuildCubes]   = useState([])
   const [gridSizeCm, setGridSizeCm]   = useState(60)
   const [activeTool, setActiveTool]   = useState(null)
   const [selectedId, setSelectedId]   = useState(null)
   const [loadStatus, setLoadStatus]   = useState('loading')
   const [showModel, setShowModel]     = useState(false)
 
-  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1 })
+  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
 
   const loadConfig = useCallback(() => {
@@ -39,16 +40,19 @@ function App() {
         const gr = data.grids         || []
         const z = data.restrictedZones || []
         const s = data.storageAreas   || []
+        const b = data.buildCubes     || []
         g.forEach((it)  => bumpCounter(nextId, 'gantry',  it.id))
         a.forEach((it)  => bumpCounter(nextId, 'arm',     it.id))
         gr.forEach((it) => bumpCounter(nextId, 'grid',    it.id))
         z.forEach((it)  => bumpCounter(nextId, 'zone',    it.id))
         s.forEach((it)  => bumpCounter(nextId, 'storage', it.id))
+        b.forEach((it)  => bumpCounter(nextId, 'build',   it.id))
         setGantries(g)
         setArms(a)
         setGrids(gr)
         setZones(z)
         setStorage(s)
+        setBuildCubes(b)
         if (data.gridSizeCm) setGridSizeCm(data.gridSizeCm)
         setLoadStatus('loaded')
       })
@@ -109,6 +113,16 @@ function App() {
     setSelectedId((cur) => (cur === id ? null : cur))
   }
 
+  // ── Build cubes ────────────────────────────────────────────────
+  const onAddBuildCube = (x, z, layer) => {
+    setBuildCubes((prev) => {
+      if (prev.some((c) => c.x === x && c.z === z && c.layer === layer)) return prev
+      return [...prev, { id: makeId('build'), x, z, layer }]
+    })
+  }
+  const onRemoveBuildCube = (id) =>
+    setBuildCubes((prev) => prev.filter((c) => c.id !== id))
+
   // ── Storage areas ──────────────────────────────────────────────
   const onCreateStorage = (rect) => {
     setStorage((s) => [...s, { id: makeId('storage'), ...rect }])
@@ -150,12 +164,14 @@ function App() {
     storageAreas: storageAreas.map(({ id, minX, maxX, minZ, maxZ }) => ({
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
-  }), [gridSizeCm, gantries, arms, grids, zones, storageAreas])
+    buildCubes: buildCubes.map(({ id, x, z, layer }) => ({ id, x: round(x), z: round(z), layer })),
+  }), [gridSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes])
 
   return (
     <div className="planner-app">
       <Panel
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
+        buildCubes={buildCubes} onRemoveBuildCube={onRemoveBuildCube}
         gridSizeCm={gridSizeCm} onChangeGridSize={setGridSizeCm}
         activeTool={activeTool} setActiveTool={setActiveTool}
         selectedId={selectedId}
@@ -171,6 +187,7 @@ function App() {
         showModel={showModel}
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
+        buildCubes={buildCubes} onAddBuildCube={onAddBuildCube} onRemoveBuildCube={onRemoveBuildCube}
         selectedId={selectedId}
         gridSizeCm={gridSizeCm}
         isArmValid={isArmValid}

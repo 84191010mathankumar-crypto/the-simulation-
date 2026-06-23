@@ -4,6 +4,7 @@ import { OrbitControls, GizmoHelper, GizmoViewport, useGLTF, Html } from '@react
 import * as THREE from 'three'
 import RectTool from './RectTool'
 import PointTool from './PointTool'
+import BuildResultTool from './BuildResultTool'
 import { GantryRobotVisual, GridAreaVisual, StorageVisual } from './RobotVisuals'
 
 function CameraFit({ bounds }) {
@@ -56,6 +57,7 @@ function Loading() {
 
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
+  buildCubes, onAddBuildCube, onRemoveBuildCube,
   selectedId, showModel = true, gridSizeCm = 100, isArmValid,
   onCreateGantry, onSelectGantry, onUpdateGantry, onDeleteGantry,
   onCreateArm, onSelectArm, onUpdateArm,
@@ -184,6 +186,16 @@ export default function SitePlannerScene({
             onSelect={onSelectArm}
             onUpdate={onUpdateArm}
             onDeselect={onDeselect}
+          />
+
+          {/* Build result — transparent box stack visualization */}
+          <BuildResultTool
+            active={activeTool === 'build'}
+            grids={grids}
+            gridSizeCm={gridSizeCm}
+            buildCubes={buildCubes}
+            onAddCube={onAddBuildCube}
+            onRemoveCube={onRemoveBuildCube}
           />
         </Suspense>
 
