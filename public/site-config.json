@@ -1,4 +1,5 @@
 {
+  "gridSizeCm": 60,
   "gantryRobots": [
     {
       "id": "gantry-2",
@@ -87,6 +88,30 @@
       "maxX": 70.78,
       "minZ": -18.98,
       "maxZ": 6.16
+    }
+  ],
+  "restrictedZones": [],
+  "storageAreas": [
+    {
+      "id": "storage-1",
+      "minX": 65.52,
+      "maxX": 70.1,
+      "minZ": -5.29,
+      "maxZ": -3.41
+    },
+    {
+      "id": "storage-3",
+      "minX": 65.23,
+      "maxX": 70.08,
+      "minZ": -17.55,
+      "maxZ": -15.58
+    },
+    {
+      "id": "storage-7",
+      "minX": 32.79,
+      "maxX": 36.63,
+      "minZ": -17.27,
+      "maxZ": -15.48
     }
   ]
 }
