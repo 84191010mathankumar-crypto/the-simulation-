@@ -6,13 +6,8 @@
 
 .planner-app {
   display: grid;
-  grid-template-rows: 1fr auto;
-  height: 100vh;
-}
-.planner-top {
-  display: grid;
   grid-template-columns: clamp(280px, 22vw, 360px) 1fr;
-  min-height: 0;
+  height: 100vh;
 }
 
 /* ── Panel (mirrors .warehouse-panel, scoped to .planner-panel) ── */
@@ -24,7 +19,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
-  height: 100%;
+  min-height: 0;
 }
 .planner-panel .head {
   padding: 14px 16px 12px;
@@ -163,45 +158,46 @@
   flex-shrink: 0;
 }
 
-/* ── JSON output bar ─────────────────────────────────────────── */
-.json-bar {
-  border-top: 1px solid var(--rule-hard);
-  background: var(--panel);
-  padding: 8px 16px 10px;
-  flex-shrink: 0;
-}
-.json-bar-head {
+/* ── JSON panel section ─────────────────────────────────────── */
+.json-section-head {
+  cursor: pointer;
+  user-select: none;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  gap: 8px;
+}
+.json-toggle {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-3);
+  line-height: 1;
+}
+.json-hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  line-height: 1.45;
   margin-bottom: 6px;
 }
-.json-bar-title {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-size: 13px;
-  color: var(--ink);
+.json-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
 }
-.json-bar-hint {
-  flex: 1;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink-3);
-  letter-spacing: 0.02em;
-}
-.json-bar-head .btn-secondary { flex: 0 0 auto; }
-.json-bar-text {
+.json-text {
   width: 100%;
-  height: 110px;
+  height: 90px;
   resize: vertical;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 4px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.45;
   color: var(--ink-2);
+  box-sizing: border-box;
 }
 
 /* ── Floating HUD chip (copied from the single-arm demo) ──────── */

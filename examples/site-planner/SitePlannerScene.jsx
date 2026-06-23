@@ -4,10 +4,8 @@ import { OrbitControls, Grid, GizmoHelper, GizmoViewport, useGLTF, Html } from '
 import * as THREE from 'three'
 import RectTool from './RectTool'
 import PointTool from './PointTool'
+import { GantryRobotVisual } from './RobotVisuals'
 
-/** Once the model's bounds are known, frame the camera around it. Runs only
- * the first time bounds become available — after that the user is free to
- * orbit/zoom without being yanked back. */
 function CameraFit({ bounds }) {
   const { camera } = useThree()
   const didFit = useRef(false)
@@ -27,9 +25,6 @@ function CameraFit({ bounds }) {
   return null
 }
 
-/** Loads /model/model.gltf and reports its footprint once it's ready, so
- * the rest of the scene (ground plane, click-catchers, camera) can size
- * itself to fit. */
 function SiteModel({ onBoundsReady }) {
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}model/model.gltf`)
 
@@ -60,10 +55,12 @@ function Loading() {
 }
 
 export default function SitePlannerScene({
-  activeTool, gantries, arms, grids, selectedId,
+  activeTool, gantries, arms, grids, zones, selectedId,
+  isArmValid,
   onCreateGantry, onSelectGantry, onUpdateGantry,
   onCreateArm, onSelectArm, onUpdateArm,
   onCreateGrid, onSelectGrid, onUpdateGrid,
+  onCreateZone, onSelectZone, onUpdateZone,
   onDeselect,
 }) {
   const [bounds, setBounds] = useState(null)
@@ -117,6 +114,7 @@ export default function SitePlannerScene({
         />
 
         <Suspense fallback={null}>
+          {/* Gantry operating areas — orange overlay + procedural gantry bridge visual */}
           <RectTool
             active={activeTool === 'gantry'}
             items={gantries}
@@ -124,11 +122,14 @@ export default function SitePlannerScene({
             color="#ff6000"
             y={0.10}
             groundSize={groundSize}
+            renderRobot={(rect) => <GantryRobotVisual rect={rect} />}
             onCreate={onCreateGantry}
             onSelect={onSelectGantry}
             onUpdate={onUpdateGantry}
             onDeselect={onDeselect}
           />
+
+          {/* Grid areas — blue overlay */}
           <RectTool
             active={activeTool === 'grid'}
             items={grids}
@@ -141,11 +142,28 @@ export default function SitePlannerScene({
             onUpdate={onUpdateGrid}
             onDeselect={onDeselect}
           />
+
+          {/* Restricted zones — red overlay, drawn below other layers */}
+          <RectTool
+            active={activeTool === 'zone'}
+            items={zones}
+            selectedId={activeTool === 'zone' ? selectedId : null}
+            color="#dc2626"
+            opacity={0.28}
+            y={0.03}
+            groundSize={groundSize}
+            onCreate={onCreateZone}
+            onSelect={onSelectZone}
+            onUpdate={onUpdateZone}
+            onDeselect={onDeselect}
+          />
+
+          {/* Robo arm placements — real KUKA KR210 URDF, ring green/red based on validity */}
           <PointTool
             active={activeTool === 'arm'}
             items={arms}
             selectedId={activeTool === 'arm' ? selectedId : null}
-            color="#10b981"
+            isValid={isArmValid}
             groundSize={groundSize}
             onCreate={onCreateArm}
             onSelect={onSelectArm}

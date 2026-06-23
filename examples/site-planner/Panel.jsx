@@ -1,6 +1,13 @@
 import React, { useState } from 'react'
 import Nav from '../../src/components/Nav'
 
+const STATUS_HINT = {
+  loading: 'Loading from public/site-config.json…',
+  loaded:  'Loaded — paste new JSON into public/site-config.json to update on next reload',
+  empty:   'public/site-config.json is empty — paste the JSON there to auto-load next time',
+  error:   "Couldn't read public/site-config.json — paste the JSON there to auto-load next time",
+}
+
 function ToolSection({ num, title, hint, activeLabel, idleLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel }) {
   return (
     <section className="section">
@@ -39,13 +46,48 @@ function ToolSection({ num, title, hint, activeLabel, idleLabel, active, onToggl
   )
 }
 
+function JsonSection({ config, loadStatus, onReload }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const json = JSON.stringify(config, null, 2)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(json).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <section className="section json-section">
+      <div className="section-head json-section-head" onClick={() => setOpen((v) => !v)}>
+        <span className="sec-num">05</span>
+        <span className="sec-title">Config JSON</span>
+        <span className="json-toggle">{open ? '−' : '+'}</span>
+      </div>
+      {open && (
+        <>
+          <div className="json-hint">{STATUS_HINT[loadStatus] || STATUS_HINT.empty}</div>
+          <div className="json-actions">
+            <button className="btn-secondary" onClick={onReload}>Reload</button>
+            <button className="btn-secondary" onClick={handleCopy}>{copied ? 'Copied!' : 'Copy'}</button>
+          </div>
+          <textarea className="json-text" readOnly value={json} spellCheck={false} />
+        </>
+      )}
+    </section>
+  )
+}
+
 export default function Panel({
-  gantries, arms, grids,
+  gantries, arms, grids, zones,
   activeTool, setActiveTool,
   selectedId,
   onSelectGantry, onDeleteGantry,
   onSelectArm, onDeleteArm,
   onSelectGrid, onDeleteGrid,
+  onSelectZone, onDeleteZone,
+  config, loadStatus, onReload,
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -94,7 +136,7 @@ export default function Panel({
         <ToolSection
           num="02"
           title="Robo arms"
-          hint="Click a point on the floor to place a robo arm's base."
+          hint="Click a point on the floor to place a robo arm base. Ring is green when on-grid and outside restricted zones."
           activeLabel="Click floor to place…"
           idleLabel="+ Place robo arm"
           active={activeTool === 'arm'}
@@ -120,10 +162,27 @@ export default function Panel({
           onDeleteItem={onDeleteGrid}
           renderLabel={(it, i) => `Grid ${i + 1}`}
         />
+
+        <ToolSection
+          num="04"
+          title="Restricted zones"
+          hint="Mark areas where arm placement is forbidden. Arms inside a zone show a red ring."
+          activeLabel="Click two floor points…"
+          idleLabel="+ Draw restricted zone"
+          active={activeTool === 'zone'}
+          onToggle={() => toggleTool('zone')}
+          items={zones}
+          selectedId={activeTool === 'zone' ? null : selectedId}
+          onSelectItem={onSelectZone}
+          onDeleteItem={onDeleteZone}
+          renderLabel={(it, i) => `Zone ${i + 1}`}
+        />
+
+        <JsonSection config={config} loadStatus={loadStatus} onReload={onReload} />
       </div>
 
       <div className="colophon">
-        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids</span>
+        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones</span>
         <span className="kbd">⌘</span>
       </div>
     </aside>

@@ -9,7 +9,7 @@
 import React, { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { RoboArmVisual } from './RobotVisuals'
+import PlacedKukaArm from './PlacedKukaArm'
 
 const _raycaster = new THREE.Raycaster()
 const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -29,8 +29,7 @@ function groundPointFromEvent(e, camera, dom) {
 function ArmMarker({ point, selected, valid, onSelect, onStartDrag }) {
   return (
     <group>
-      {/* Invisible, generously-sized hit target — the robot silhouette
-          underneath is too thin/irregular to reliably click on directly. */}
+      {/* Invisible hit-target — the URDF mesh surfaces are complex to click on. */}
       <mesh
         position={[point.x, 0.6, point.z]}
         onPointerDown={(e) => { e.stopPropagation(); onStartDrag(); if (onSelect) onSelect() }}
@@ -38,7 +37,7 @@ function ArmMarker({ point, selected, valid, onSelect, onStartDrag }) {
         <cylinderGeometry args={[0.45, 0.45, 1.3, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      <RoboArmVisual x={point.x} z={point.z} valid={valid} highlight={selected} />
+      <PlacedKukaArm x={point.x} z={point.z} valid={valid} highlight={selected} />
     </group>
   )
 }
