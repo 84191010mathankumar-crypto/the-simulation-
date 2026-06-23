@@ -30,18 +30,41 @@ function Leg({ x, z }) {
   )
 }
 
-/** Static frame: 4 legs + 2 rails the bridge travels along. */
-function GantryFrame({ travelX, travelZ }) {
+/**
+ * Evenly distribute support pillars along a rail of length `span`, targeting
+ * roughly `spacing` metres between them.  Always includes both ends and
+ * distributes the interior pillars so every gap is equal — e.g. an 18 m rail
+ * with spacing=10 yields 3 pillars at 0, 9, 18 m (two ~9 m bays) rather than
+ * pillars at 0, 10, 18 m (one 10 m + one 8 m bay).
+ *
+ * Returns positions in [0, span]; caller offsets to the rail's start.
+ */
+function pillarStations(span, spacing = 6) {
+  const n = Math.max(1, Math.round(span / spacing))
+  const out = []
+  for (let i = 0; i <= n; i++) out.push((i / n) * span)
+  return out
+}
+
+/** Static frame: evenly-spaced pillars down each long rail + the 2 rails the
+ * bridge travels along.  Pillars target ~`pillarSpacing` m apart (default 6)
+ * and are distributed evenly so end gaps equal interior gaps. */
+function GantryFrame({ travelX, travelZ, pillarSpacing = 6 }) {
   const railLen = travelX * 2 + 0.3
-  // Scale leg/rail thickness with the frame span so a warehouse-wide gantry
-  // doesn't look like a toothpick frame.
-  const t = Math.max(0.12, Math.min(0.4, travelX * 0.06))
+  // Rails stay slim — same proportions as the original workcell gantry.
+  const t = 0.1
+  // Pillar X positions along the full rail span (centred on origin).
+  const stations = pillarStations(travelX * 2, pillarSpacing).map((p) => p - travelX)
+
   return (
     <group>
-      <Leg x={-travelX} z={-travelZ} />
-      <Leg x={ travelX} z={-travelZ} />
-      <Leg x={-travelX} z={ travelZ} />
-      <Leg x={ travelX} z={ travelZ} />
+      {/* Pillars down each long rail (left & right sides). */}
+      {stations.map((x, i) => (
+        <Leg key={`l-${i}`} x={x} z={-travelZ} />
+      ))}
+      {stations.map((x, i) => (
+        <Leg key={`r-${i}`} x={x} z={travelZ} />
+      ))}
 
       <mesh castShadow receiveShadow position={[0, RAIL_Y, -travelZ]}>
         <boxGeometry args={[railLen, t, t]} />
@@ -83,7 +106,7 @@ function Gripper({ gripperRef, leftFingerRef, rightFingerRef }) {
  * `pose.{x,y,z,rotY}` in the store is the gripper TIP position directly —
  * there's no inverse kinematics step, the numbers are the position.
  */
-export default function GantryRobot({ travelX = DEFAULT_TRAVEL_X, travelZ = DEFAULT_TRAVEL_Z }) {
+export default function GantryRobot({ travelX = DEFAULT_TRAVEL_X, travelZ = DEFAULT_TRAVEL_Z, pillarSpacing = 6 }) {
   const bridgeRef  = useRef()
   const trolleyRef = useRef()
   const mastRef    = useRef()
@@ -116,7 +139,7 @@ export default function GantryRobot({ travelX = DEFAULT_TRAVEL_X, travelZ = DEFA
   const beamDepth = travelZ * 2 + 0.2
   return (
     <group>
-      <GantryFrame travelX={travelX} travelZ={travelZ} />
+      <GantryFrame travelX={travelX} travelZ={travelZ} pillarSpacing={pillarSpacing} />
       <group ref={bridgeRef}>
         <mesh castShadow receiveShadow position={[0, RAIL_Y, 0]}>
           <boxGeometry args={[0.16, 0.16, beamDepth]} />

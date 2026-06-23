@@ -5,7 +5,20 @@ const steel  = { color: '#2b2d31', metalness: 0.55, roughness: 0.4 }
 const accent = { color: '#ff6000', metalness: 0.3, roughness: 0.5 }
 const dark   = { color: '#16181b', metalness: 0.5, roughness: 0.55 }
 
-export function GantryRobotVisual({ rect }) {
+/**
+ * Evenly distribute support stations along a rail of length `span`, targeting
+ * roughly `spacing` metres between them and always including both ends.  End
+ * gaps equal interior gaps — e.g. an 18 m rail at spacing=10 gives stations at
+ * 0, 9, 18 m rather than 0, 10, 18 m.
+ */
+function pillarStations(span, spacing = 6) {
+  const n = Math.max(1, Math.round(span / spacing))
+  const out = []
+  for (let i = 0; i <= n; i++) out.push((i / n) * span)
+  return out
+}
+
+export function GantryRobotVisual({ rect, pillarSpacing = 6 }) {
   const width = Math.max(0.4, rect.maxX - rect.minX)
   const depth = Math.max(0.4, rect.maxZ - rect.minZ)
   const cx = (rect.minX + rect.maxX) / 2
@@ -13,17 +26,21 @@ export function GantryRobotVisual({ rect }) {
   const legHeight = THREE.MathUtils.clamp(Math.min(width, depth) * 0.22, 2.4, 4.5)
   const legR = 0.09
 
-  const corners = [
-    [rect.minX, rect.minZ],
-    [rect.maxX, rect.minZ],
-    [rect.minX, rect.maxZ],
-    [rect.maxX, rect.maxZ],
-  ]
+  // Pillar X positions along the long rails (which run along X at the two Z
+  // edges).  Distributed evenly with ~6 m bays, both ends included.
+  const xStations = pillarStations(width, pillarSpacing).map((p) => rect.minX + p)
 
   return (
     <group>
-      {corners.map(([x, z], i) => (
-        <mesh key={i} position={[x, legHeight / 2, z]}>
+      {/* Pillars down each long rail (left & right sides). */}
+      {xStations.map((x, i) => (
+        <mesh key={`l-${i}`} position={[x, legHeight / 2, rect.minZ]}>
+          <cylinderGeometry args={[legR, legR, legHeight, 12]} />
+          <meshStandardMaterial {...steel} />
+        </mesh>
+      ))}
+      {xStations.map((x, i) => (
+        <mesh key={`r-${i}`} position={[x, legHeight / 2, rect.maxZ]}>
           <cylinderGeometry args={[legR, legR, legHeight, 12]} />
           <meshStandardMaterial {...steel} />
         </mesh>
