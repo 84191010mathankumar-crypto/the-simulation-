@@ -30,3 +30,7 @@ Thumbs.db
 
 # Smoke-test screenshots (regenerated on every run)
 scripts/smoke-*.png
+
+# Large 3D site model — too big for git, kept locally only
+model/
+public/model/

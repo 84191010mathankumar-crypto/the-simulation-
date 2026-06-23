@@ -14,10 +14,12 @@ export default function Nav() {
     ? 'warehouse'
     : path.includes('/examples/gantry')
       ? 'gantry'
-      : 'arm'
+      : path.includes('/examples/site-planner')
+        ? 'site-planner'
+        : 'arm'
 
   return (
-    <nav className="page-nav page-nav-3" aria-label="Demos">
+    <nav className="page-nav page-nav-4" aria-label="Demos">
       <a
         href={base}
         className={`pn-tab ${current === 'arm' ? 'active' : ''}`}
@@ -58,6 +60,18 @@ export default function Nav() {
           <rect x="9"  y="1"  width="6" height="6" />
         </svg>
         <span>Warehouse</span>
+      </a>
+      <a
+        href={`${base}examples/site-planner/`}
+        className={`pn-tab ${current === 'site-planner' ? 'active' : ''}`}
+        aria-current={current === 'site-planner' ? 'page' : undefined}
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square">
+          <rect x="3" y="3" width="18" height="18" />
+          <path d="M3 9 H21" />
+          <path d="M9 9 V21" />
+        </svg>
+        <span>Site planner</span>
       </a>
     </nav>
   )

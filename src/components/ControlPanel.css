@@ -28,8 +28,11 @@
 }
 .page-nav-3 { grid-template-columns: 1fr 1fr 1fr; }
 .page-nav-3 .pn-tab span { display: none; }
+.page-nav-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.page-nav-4 .pn-tab span { display: none; }
 @media (min-width: 1600px) {
   .page-nav-3 .pn-tab span { display: inline; }
+  .page-nav-4 .pn-tab span { display: inline; }
 }
 .pn-tab {
   display: flex;
