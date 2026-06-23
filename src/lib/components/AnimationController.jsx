@@ -62,6 +62,14 @@ function computePlatformPoseFor(targetWorldPos, currentPlatformPos, parkingRef) 
 // (not just its centre point) stays clear of them.
 const AGV_CLEARANCE = 0.65
 
+// Must match the floor <Grid cellSize> in WarehouseScene so a "grid line"
+// here is the same line the player sees drawn on the floor.
+const GRID_CELL = 1
+
+function snapToGrid(v) {
+  return Math.round(v / GRID_CELL) * GRID_CELL
+}
+
 /* Does the segment p0→p1 (2D, [x,z]) cross the zone's rectangle, expanded
  * by `margin` on every side?  Standard slab/AABB segment test. */
 function segmentHitsZone(p0, p1, zone, margin) {
@@ -85,52 +93,97 @@ function segmentHitsZone(p0, p1, zone, margin) {
   return true
 }
 
-function findBlockingZone(p0, p1, zones) {
+function findBlockingZone(p0, p1, zones, margin = AGV_CLEARANCE) {
   for (const z of zones) {
-    if (segmentHitsZone(p0, p1, z, AGV_CLEARANCE)) return z
+    if (segmentHitsZone(p0, p1, z, margin)) return z
   }
   return null
 }
 
-/* Builds the list of waypoints (world positions) the platform should drive
- * through to get from `fromPos` to `toPos` without entering a restricted
- * zone.  Straight line if nothing's in the way; otherwise routes around the
- * nearest corner of the first zone it hits.  This is a simple one-bounce
- * router, not full pathfinding — plenty for a handful of user-drawn zones. */
-function buildAvoidancePath(fromPos, toPos, zones) {
-  if (!zones || zones.length === 0) return [fromPos, toPos]
-
-  const p0 = [fromPos[0], fromPos[2]]
-  const p1 = [toPos[0], toPos[2]]
-  const blocker = findBlockingZone(p0, p1, zones)
-  if (!blocker) return [fromPos, toPos]
-
-  const m = AGV_CLEARANCE
-  const candidates = [
-    [blocker.minX - m, blocker.minZ - m],
-    [blocker.minX - m, blocker.maxZ + m],
-    [blocker.maxX + m, blocker.minZ - m],
-    [blocker.maxX + m, blocker.maxZ + m],
+function cornerCandidates(blocker, margin) {
+  return [
+    [blocker.minX - margin, blocker.minZ - margin],
+    [blocker.minX - margin, blocker.maxZ + margin],
+    [blocker.maxX + margin, blocker.minZ - margin],
+    [blocker.maxX + margin, blocker.maxZ + margin],
   ]
+}
 
-  const cost = (c) => Math.hypot(c[0] - p0[0], c[1] - p0[1]) + Math.hypot(p1[0] - c[0], p1[1] - c[1])
-
-  let best = null, bestCost = Infinity
-  for (const c of candidates) {
-    if (findBlockingZone(p0, c, zones) || findBlockingZone(c, p1, zones)) continue
-    const cst = cost(c)
-    if (cst < bestCost) { bestCost = cst; best = c }
-  }
-  // Nothing fully clear (e.g. zones overlap) — still detour via the cheapest
-  // corner rather than driving straight through the obstacle.
-  if (!best) {
+/* Picks the cheapest corner of `blocker` (expanded by `margin`) such that a
+ * straight a2→corner→b2 detour doesn't re-cross any zone in `zones`. Falls
+ * back to a corner that at least clears `blocker` itself, then to the
+ * cheapest corner outright — resolveZoneCrossings below re-checks the
+ * result and will detour again around whatever it still hits. */
+function pickDetourCorner(a2, b2, blocker, zones, margin) {
+  const candidates = cornerCandidates(blocker, margin)
+  const cost = (c) => Math.hypot(c[0] - a2[0], c[1] - a2[1]) + Math.hypot(b2[0] - c[0], b2[1] - c[1])
+  const cheapestClearing = (against) => {
+    let best = null, bestCost = Infinity
     for (const c of candidates) {
+      if (findBlockingZone(a2, c, against) || findBlockingZone(c, b2, against)) continue
       const cst = cost(c)
       if (cst < bestCost) { bestCost = cst; best = c }
     }
+    return best
   }
+  return cheapestClearing(zones) || cheapestClearing([blocker])
+    || candidates.reduce((best, c) => (best === null || cost(c) < cost(best) ? c : best), null)
+}
 
-  return [fromPos, [best[0], fromPos[1], best[1]], toPos]
+/* Makes a single leg a→b axis-aligned: if it's already parallel to X or Z
+ * (or zero-length), it's left as one leg; otherwise a bend is inserted
+ * (move in X to b's X, then in Z to b's Z) so the AGV is never asked to
+ * drive diagonally. */
+function axisAlignLeg(a, b) {
+  if (Math.abs(a[0] - b[0]) < 1e-6 || Math.abs(a[2] - b[2]) < 1e-6) return [b]
+  return [[b[0], a[1], a[2]], b]
+}
+
+/* Runs axisAlignLeg over an entire waypoint list, so no matter how the
+ * waypoints were produced (grid-snapping, a zone detour corner, …) the
+ * resulting path is guaranteed to have no diagonal legs. */
+function axisAlignPath(waypoints) {
+  const out = [waypoints[0]]
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    for (const p of axisAlignLeg(out[out.length - 1], waypoints[i + 1])) out.push(p)
+  }
+  return out
+}
+
+/* Repeatedly finds the first leg of `path` that cuts through a restricted
+ * zone and reroutes it around that zone's nearest clear corner, until no
+ * leg crosses any zone. This is what guarantees the AGV never drives
+ * through a zone — it's checked on the FINAL path (after grid-snapping),
+ * not just the original straight line, so a detour the grid-snap step
+ * introduces gets caught and fixed too. A capped number of passes keeps a
+ * pathological zone layout (e.g. several overlapping zones) from looping
+ * forever; in practice a handful of user-drawn zones resolves in 1-2 passes.
+ * Each detour is re-axis-aligned immediately (when gridMovement is on) so
+ * the new corner never introduces a diagonal hop either. */
+function resolveZoneCrossings(path, zones, gridMovement) {
+  if (!zones || zones.length === 0) return path
+  let result = path
+  for (let pass = 0; pass < 12; pass++) {
+    let fixedSomething = false
+    for (let i = 0; i < result.length - 1; i++) {
+      const a = result[i], b = result[i + 1]
+      const a2 = [a[0], a[2]], b2 = [b[0], b[2]]
+      const blocker = findBlockingZone(a2, b2, zones)
+      if (!blocker) continue
+      // Extra margin when grid-snapping the corner below, so rounding it onto
+      // the nearest grid line can't pull it back inside the AGV's clearance.
+      const margin = gridMovement ? AGV_CLEARANCE + GRID_CELL : AGV_CLEARANCE
+      let corner = pickDetourCorner(a2, b2, blocker, zones, margin)
+      if (gridMovement) corner = [snapToGrid(corner[0]), snapToGrid(corner[1])]
+      const mid = [corner[0], a[1], corner[1]]
+      result = [...result.slice(0, i + 1), mid, ...result.slice(i + 1)]
+      if (gridMovement) result = axisAlignPath(result)
+      fixedSomething = true
+      break
+    }
+    if (!fixedSomething) break
+  }
+  return result
 }
 
 function lerpRotation(a, b, t) {
@@ -150,21 +203,14 @@ function legPosition(a, b, u) {
   return [a[0] + (b[0] - a[0]) * u, y, a[2] + (b[2] - a[2]) * u]
 }
 
-// Must match the floor <Grid cellSize> in WarehouseScene so a "grid line"
-// here is the same line the player sees drawn on the floor.
-const GRID_CELL = 1
-
-function snapToGrid(v) {
-  return Math.round(v / GRID_CELL) * GRID_CELL
-}
-
-/* Expands a raw path (e.g. from buildAvoidancePath) into one that actually
- * rides along the floor's grid lines instead of just being axis-aligned at
- * arbitrary coordinates.  Each leg a→b becomes: a → nearest grid
+/* Expands a raw path so it rides along the floor's grid lines for as much
+ * of the journey as possible.  Each leg a→b becomes: a → nearest grid
  * intersection to a → the intersection that shares b's grid X (still a real
  * intersection, since both coordinates are snapped) → nearest grid
- * intersection to b → b.  The first/last hops off the grid are unavoidable
- * since the AGV parks wherever the target object actually is. */
+ * intersection to b → b.  The a→aSnap and bSnap→b hops are still diagonal
+ * at this point (the AGV parks wherever the target object actually is, not
+ * necessarily on the grid) — axisAlignPath (called right after this by
+ * buildSafePath) straightens those into axis-aligned hops too. */
 function gridSnapPath(waypoints) {
   const out = [waypoints[0]]
   const push = (p) => {
@@ -182,9 +228,19 @@ function gridSnapPath(waypoints) {
   return out
 }
 
-/* Walks a multi-waypoint path (as built by buildAvoidancePath, optionally
- * grid-snapped by gridSnapPath) to the world position/rotation at overall
- * progress `t`. */
+/* Builds the AGV's travel path from fromPos to toPos: grid-snapped if
+ * `gridMovement` is on, then guaranteed zone-safe either way — see
+ * resolveZoneCrossings, which re-checks the FINAL path (after snapping) so
+ * a detour the snap step introduces can never sneak the AGV through a
+ * restricted zone. */
+function buildSafePath(fromPos, toPos, zones, gridMovement) {
+  let path = gridMovement ? axisAlignPath(gridSnapPath([fromPos, toPos])) : [fromPos, toPos]
+  path = resolveZoneCrossings(path, zones, gridMovement)
+  return path
+}
+
+/* Walks a multi-waypoint path (as built by buildSafePath) to the world
+ * position/rotation at overall progress `t`. */
 function poseAlongPath(path, rotA, rotB, t) {
   const rotation = lerpRotation(rotA, rotB, t)
   if (path.length < 2) return { position: [...path[0]], rotation }
@@ -279,11 +335,10 @@ export default function AnimationController() {
       } else if (animState === 'returning') {
         const homeAngles = clampAllJoints({ ...HOME_ANGLES })
         const homePlatform = { ...store.homePlatform }
-        const rawPath = buildAvoidancePath(currentPlatform.position, homePlatform.position, store.zones)
         useStore.setState({
           fromAngles: currentAngles, toAngles: homeAngles,
           fromPlatform: currentPlatform, toPlatform: homePlatform,
-          platformPath: store.gridMovement ? gridSnapPath(rawPath) : rawPath,
+          platformPath: buildSafePath(currentPlatform.position, homePlatform.position, store.zones, store.gridMovement),
         })
         store.addLog('info', 'Returning to HOME…')
       } else {
@@ -362,11 +417,10 @@ function _solveSegment(useStore, store, target, currentAngles, currentPlatform) 
     const clamped = clampAllJoints(solved)
     applyAnglesToRobot(robotRef, currentAngles)
     addLog('ok', `IK converged for ${target.toUpperCase()}`, _logAngles(clamped))
-    const rawPath = buildAvoidancePath(currentPlatform.position, targetPlatform.position, store.zones)
     useStore.setState({
       fromAngles: currentAngles, toAngles: clamped,
       fromPlatform: currentPlatform, toPlatform: targetPlatform,
-      platformPath: store.gridMovement ? gridSnapPath(rawPath) : rawPath,
+      platformPath: buildSafePath(currentPlatform.position, targetPlatform.position, store.zones, store.gridMovement),
     })
   } else {
     addLog('warn', `IK did not converge for ${target} — target may be out of reach`)
