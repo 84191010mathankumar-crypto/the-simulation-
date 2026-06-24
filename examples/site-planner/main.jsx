@@ -90,66 +90,49 @@ function App() {
   }
 
   // ── Robo arms ─────────────────────────────────────────────────
-  // Adds an arm at the next position in the row, always anchored to the
-  // top-right corner of the largest grid (just outside the top edge).
-  // Arm 0 → (g.maxX, g.minZ − 0.5), arm 1 → (g.maxX − 2.5, g.minZ − 0.5), etc.
+  // All arms sit on the south edge (z = grid.minZ - 0.5), advancing
+  // left-to-right by MIN_ARM_SPACING * 2 (5 m) per arm.
   const onAddArm = useCallback(() => {
     if (grids.length === 0) {
       setArms((prev) => [...prev, { id: makeId('arm'), x: 0, z: 0 }])
       return
     }
 
-    // Largest grid is the fixed reference (the main navigation floor).
     const g = grids.reduce((best, cur) => {
       const area = (cur.maxX - cur.minX) * (cur.maxZ - cur.minZ)
       return (!best || area > (best.maxX - best.minX) * (best.maxZ - best.minZ)) ? cur : best
     }, null)
 
-    const OFFSET = 0.5  // metres outside the grid boundary
+    const OFFSET = 0.5
+    const STEP = MIN_ARM_SPACING * 2  // 5 m between arms
 
     setArms((prev) => {
-      if (prev.length === 0) {
-        // First arm: top-right corner, just outside the top (minZ) edge.
-        return [...prev, { id: makeId('arm'), x: g.maxX, z: g.minZ - OFFSET }]
+      const newZ = g.maxZ + OFFSET   // maxZ is the front/near edge (bottom of screen)
+      // Advance slot index until the x position doesn't land inside any storage area
+      let slot = prev.length
+      let newX
+      for (let attempt = 0; attempt < 50; attempt++) {
+        newX = round(g.minX + STEP + slot * STEP * 2)
+        const blocked = storageAreas.some(
+          (s) => newX >= s.minX && newX <= s.maxX && newZ >= s.minZ && newZ <= s.maxZ
+        )
+        if (!blocked) break
+        slot++
       }
-
-      const xs = prev.map((a) => a.x)
-      const zs = prev.map((a) => a.z)
-      const xRange = Math.max(...xs) - Math.min(...xs)
-      const zRange = Math.max(...zs) - Math.min(...zs)
-
-      let newX, newZ
-      if (xRange >= zRange) {
-        // X-dominant row (along top/bottom edge) → extend leftward.
-        newX = Math.min(...xs) - MIN_ARM_SPACING
-        newZ = zs.reduce((s, v) => s + v, 0) / zs.length
-      } else {
-        // Z-dominant row (along left/right edge) → extend downward.
-        newX = xs.reduce((s, v) => s + v, 0) / xs.length
-        newZ = Math.max(...zs) + MIN_ARM_SPACING
-      }
-
       return [...prev, { id: makeId('arm'), x: newX, z: newZ }]
     })
-  }, [grids])
+  }, [grids, storageAreas])
 
   const onCreateArm = (point) => {
-    // Scene-click fallback: snap to the existing row line then place.
-    setArms((prev) => {
-      let { x, z } = point
-      if (prev.length >= 1) {
-        const xs = prev.map((a) => a.x)
-        const zs = prev.map((a) => a.z)
-        const xRange = Math.max(...xs) - Math.min(...xs)
-        const zRange = Math.max(...zs) - Math.min(...zs)
-        if (xRange >= zRange) {
-          z = zs.reduce((s, v) => s + v, 0) / zs.length
-        } else {
-          x = xs.reduce((s, v) => s + v, 0) / xs.length
-        }
-      }
-      return [...prev, { id: makeId('arm'), x, z }]
-    })
+    // Canvas-click: snap z to the front edge (maxZ + 0.5).
+    if (grids.length > 0) {
+      const g = grids.reduce((best, cur) => {
+        const area = (cur.maxX - cur.minX) * (cur.maxZ - cur.minZ)
+        return (!best || area > (best.maxX - best.minX) * (best.maxZ - best.minZ)) ? cur : best
+      }, null)
+      point = { x: point.x, z: g.maxZ + 0.5 }
+    }
+    setArms((prev) => [...prev, { id: makeId('arm'), ...point }])
     setActiveTool(null)
   }
   const onUpdateArm = (id, point) =>
