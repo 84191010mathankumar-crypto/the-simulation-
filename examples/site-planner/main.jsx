@@ -28,15 +28,16 @@ function App() {
   const [zones, setZones]             = useState([])
   const [storageAreas, setStorage]    = useState([])
   const [buildCubes, setBuildCubes]   = useState([])
-  const [gridSizeCm, setGridSizeCm]   = useState(60)
+  const [gridSizeCm, setGridSizeCm]   = useState(200)
   const [boxSizeCm, setBoxSizeCm]     = useState(60)
   const [activeTool, setActiveTool]   = useState(null)
   const [selectedId, setSelectedId]   = useState(null)
   const [loadStatus, setLoadStatus]   = useState('loading')
   const [showModel, setShowModel]     = useState(false)
+  const [modelOpacity, setModelOpacity] = useState(1)
   const [simulating, setSimulating]   = useState(false)
   const [simDone, setSimDone]         = useState(false)
-  const [robotType, setRobotType]     = useState('arms')   // 'arms' | 'gantry'
+  const [robotType, setRobotType]     = useState('gantry') // 'arms' | 'gantry'
   const [simProgress, setSimProgress] = useState({ pending: 0, assigned: 0, done: 0 })
 
   const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1 })
@@ -311,16 +312,35 @@ function App() {
 
   // Anchor the AGV's grid lattice to the floor grid's cell centres so the
   // robots travel along the same lines the boxes sit on.
+  // Origin at the grid's top-left corner so snap values land exactly on the
+  // visible grid lines (minX, minX+unit, minX+2*unit, …) rather than on
+  // cell centres (which are halfway between lines).
   const gridOrigin = useMemo(() => {
     const g = grids[0]
     if (!g) return [0, 0]
-    return [g.minX + gridUnit / 2, g.minZ + gridUnit / 2]
-  }, [grids, gridUnit])
+    return [g.minX, g.minZ]
+  }, [grids])
 
   const sim = useMemo(
     () => buildSimulation({ buildCubes, storageAreas, unit, gantries, robotMode: robotType }),
     [buildCubes, storageAreas, unit, gantries, robotType]
   )
+
+  // Give every robot a unique X travel lane so no two robots ever share the
+  // same grid column during transit.  With 7 arms landing in only 3 snapped
+  // columns (65.36, 67.36, 69.36), multiple robots get identical BFS paths
+  // and physically overlap.  Spreading across 7 consecutive 2 m columns
+  // (right-to-left from the rightmost arm's column) gives each robot a private
+  // lane while staying inside the grid boundary.
+  const laneXMap = useMemo(() => {
+    if (!grids[0] || gridUnit === 0 || arms.length === 0) return new Map()
+    const sorted = [...arms].sort((a, b) => a.x - b.x)
+    const rightCol = Math.round((sorted[sorted.length - 1].x - gridOrigin[0]) / gridUnit)
+    return new Map(sorted.map((arm, i) => [
+      arm.id,
+      gridOrigin[0] + (rightCol - (sorted.length - 1 - i)) * gridUnit,
+    ]))
+  }, [arms, grids, gridOrigin, gridUnit])
 
   // One stable store per arm — created on demand, reused across renders so a
   // loaded URDF isn't thrown away when an unrelated bit of state changes.
@@ -328,13 +348,18 @@ function App() {
   const simRobots = useMemo(() => arms.map((a) => {
     let store = storesRef.current.get(a.id)
     if (!store) { store = createRobotStore(); storesRef.current.set(a.id, store) }
-    return { id: a.id, store, home: [a.x, 0, a.z] }
-  }), [arms])
+    // Use lane-assigned X in the scheduler's home so canStartSafely and
+    // preAssignTasks see positions that match the actual platform placement.
+    const laneX = laneXMap.get(a.id)
+      ?? (Math.round((a.x - gridOrigin[0]) / gridUnit) * gridUnit + gridOrigin[0])
+    return { id: a.id, store, home: [laneX, 0, a.z] }
+  }), [arms, laneXMap, gridOrigin, gridUnit])
 
   // Push mobile-mode + grid settings into each arm's store as they change.
   useEffect(() => {
     const zoneList = zones.map((z) => ({ minX: z.minX, maxX: z.maxX, minZ: z.minZ, maxZ: z.maxZ }))
     for (const r of simRobots) {
+      const [hx, , hz] = r.home  // hx is already the lane-unique, grid-snapped X
       r.store.setState({
         mobileMode: true,
         parkingRef: 'self',
@@ -342,11 +367,11 @@ function App() {
         gridCell: gridUnit,
         gridOrigin,
         zones: zoneList,
-        platformPose: { position: r.home, rotation: [0, 0, 0] },
-        homePlatform: { position: r.home, rotation: [0, 0, 0] },
+        platformPose: { position: [hx, 0, hz], rotation: [0, 0, 0] },
+        homePlatform: { position: [hx, 0, hz], rotation: [0, 0, 0] },
       })
     }
-  }, [simRobots, unit, gridOrigin, zones])
+  }, [simRobots, unit, gridOrigin, zones, gridUnit])
 
   // Each carried box exposes a live ref into its scene mesh for the scheduler.
   const simMeshRefs = useRef(new Map())
@@ -487,6 +512,7 @@ function App() {
         onSelectZone={onSelectZone} onDeleteZone={onDeleteZone}
         onSelectStorage={onSelectStorage} onDeleteStorage={onDeleteStorage}
         showModel={showModel} onToggleModel={() => setShowModel((v) => !v)}
+        modelOpacity={modelOpacity} onChangeModelOpacity={setModelOpacity}
         config={config} loadStatus={loadStatus} onReload={loadConfig}
         simulating={simulating} simDone={simDone} onStartSim={onStartSim} onStopSim={onStopSim}
         simStats={sim} simProgress={simProgress} armCount={arms.length}
@@ -494,6 +520,7 @@ function App() {
       />
       <SitePlannerScene
         showModel={showModel}
+        modelOpacity={modelOpacity}
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onAddBuildCube={onAddBuildCube} onRemoveBuildCube={onRemoveBuildCube}

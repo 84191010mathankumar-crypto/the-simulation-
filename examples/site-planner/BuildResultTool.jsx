@@ -118,6 +118,7 @@ export default function BuildResultTool({ active, grids, gridSizeCm, buildCubes,
             ref={vRef}
             args={[undefined, undefined, MAX_CELLS]}
             frustumCulled={false}
+            onPointerDown={handleFloorPlusClick}
           >
             <boxGeometry args={[plusThick, 0.03, plusLen]} />
             <meshBasicMaterial color="#3b6fff" transparent opacity={0.7} depthWrite={false} />

@@ -16,10 +16,12 @@
 import { create } from 'zustand'
 
 // How high the gantry's rails sit above the floor.
-export const RAIL_Y = 1.85
+// Must match GantryRobotVisual's legHeight (6 m) so the animated frame
+// aligns with the static layout preview.
+export const RAIL_Y = 6.0
 // Safe travel height the gripper retracts to while moving sideways, so it
 // clears the boxes and frame legs.
-export const TRAVEL_Y = 1.55
+export const TRAVEL_Y = 5.7
 
 export const BOX_HALF = 0.11
 

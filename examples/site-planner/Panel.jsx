@@ -8,14 +8,24 @@ const STATUS_HINT = {
   error:   "Couldn't read public/site-config.json — paste the JSON there to auto-load next time",
 }
 
-function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel, children, addIcon = '+', addTitle = 'Add' }) {
+function ToolSection({ num, title, hint, activatingLabel, active, onToggle, items, selectedId, onSelectItem, onDeleteItem, renderLabel, children, addIcon = '+', addTitle = 'Add', autoActivate = false }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => { if (active) setOpen(true) }, [active])
 
+  function handleHeadClick() {
+    const nextOpen = !open
+    setOpen(nextOpen)
+    // autoActivate: opening the section enters edit mode; closing exits it.
+    if (autoActivate) {
+      if (nextOpen && !active) onToggle()
+      if (!nextOpen && active) onToggle()
+    }
+  }
+
   return (
     <section className={`section${open ? ' sec-open' : ''}`}>
-      <div className="section-head" onClick={() => setOpen((v) => !v)}>
+      <div className="section-head" onClick={handleHeadClick}>
         <span className="sec-num">{num}</span>
         <span className="sec-title">{title}</span>
         {!open && items.length > 0 && <span className="sec-count">{items.length}</span>}
@@ -144,6 +154,7 @@ export default function Panel({
   onSelectZone, onDeleteZone,
   onSelectStorage, onDeleteStorage,
   showModel, onToggleModel,
+  modelOpacity, onChangeModelOpacity,
   config, loadStatus, onReload,
   simulating, simDone, onStartSim, onStopSim, simStats, simProgress, armCount,
   gantryCount = 0, robotType = 'arms', setRobotType,
@@ -202,6 +213,21 @@ export default function Panel({
             <span className="view-icon">{showModel ? '◉' : '○'}</span>
             Site model
           </button>
+          {showModel && (
+            <div className="opacity-row">
+              <span className="opacity-label">Opacity</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={modelOpacity}
+                onChange={(e) => onChangeModelOpacity(Number(e.target.value))}
+                className="opacity-slider"
+              />
+              <span className="opacity-value">{Math.round(modelOpacity * 100)}%</span>
+            </div>
+          )}
         </div>
 
         {/* Builder — choose which robot type places the boxes */}
@@ -385,12 +411,13 @@ export default function Panel({
         <ToolSection
           num="06"
           title="Build result"
-          hint="Visualize what needs to be built. In edit mode, click a + icon on the grid to place a box. Stack boxes by clicking the + on top of a placed box."
-          activatingLabel="Click + on grid to place a box…"
+          hint="Click + on the 3D grid to place a box. Stack boxes by clicking + on top of an existing box."
+          activatingLabel="Click + on the grid to place a box…"
           active={activeTool === 'build'}
           onToggle={() => toggleTool('build')}
-          addIcon="✎"
-          addTitle="Edit build result"
+          addIcon="+"
+          addTitle="Add box"
+          autoActivate
           items={buildCubes}
           selectedId={null}
           onSelectItem={() => {}}

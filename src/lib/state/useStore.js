@@ -91,6 +91,7 @@ export function createRobotStore() {
     animProgress: 0,
     fromAngles: null,
     toAngles: null,
+    paused: false,   // set by collision-avoidance; holds platform motion
 
     // ── Follow mode (live IK while dragging the target) ────────────────────
     followTarget: null,
@@ -160,6 +161,7 @@ export function createRobotStore() {
       jointAngles: { ...HOME_ANGLES },
       animState: 'idle',
       animProgress: 0,
+      paused: false,
     }),
   })))
 }

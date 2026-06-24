@@ -10,15 +10,15 @@ import { easeInOutCubic } from '../ik/ikSolver'
 //   ascending_place → returning → idle
 const SPEED = {
   moving_to_start:   1.4,
-  descending_pick:   0.7,
+  descending_pick:   2.4,   // 6 m rail → longer vertical travel needs more time
   grabbing:          0.35,
-  ascending_pick:    0.7,
+  ascending_pick:    2.4,
   moving_to_end:      1.4,
   rotating:           0.6,
-  descending_place:   0.7,
+  descending_place:   2.4,
   releasing:          0.35,
-  ascending_place:    0.7,
-  returning:          1.1,
+  ascending_place:    2.4,
+  returning:          1.8,  // return includes vertical lift from pick/place height
 }
 
 const SEQUENCE = {

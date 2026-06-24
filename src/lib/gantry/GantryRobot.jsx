@@ -141,7 +141,9 @@ export default function GantryRobot({ travelX = DEFAULT_TRAVEL_X, travelZ = DEFA
   const beamDepth = travelZ * 2 + 0.2
   return (
     <group>
+      {/* Fixed structural frame: legs + two longitudinal rails */}
       <GantryFrame travelX={travelX} travelZ={travelZ} pillarSpacing={pillarSpacing} />
+      {/* Bridge slides in X along the rails; trolley + robot hang from it */}
       <group ref={bridgeRef}>
         <mesh castShadow receiveShadow position={[0, RAIL_Y, 0]}>
           <boxGeometry args={[0.16, 0.16, beamDepth]} />
