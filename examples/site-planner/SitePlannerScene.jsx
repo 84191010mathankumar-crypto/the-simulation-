@@ -99,7 +99,7 @@ function Loading() {
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
-  selectedId, showModel = true, gridSizeCm = 100, isArmValid,
+  selectedId, showModel = true, gridSizeCm = 100, boxSizeCm = 60, isArmValid,
   simulating, simRobots, simBoxes, gantryInstances = [], activeGantryIds,
   consumedSourceKeys, schedulers = [], registerSimMeshRef,
   onCreateGantry, onSelectGantry, onUpdateGantry, onDeleteGantry,
@@ -218,7 +218,7 @@ export default function SitePlannerScene({
             renderRobot={(rect) => (
               <StorageVisual
                 rect={rect}
-                gridSizeCm={gridSizeCm}
+                gridSizeCm={boxSizeCm}
                 hiddenKeys={simulating ? consumedSourceKeys : null}
               />
             )}
@@ -260,7 +260,7 @@ export default function SitePlannerScene({
           <BuildResultTool
             active={!simulating && activeTool === 'build'}
             grids={grids}
-            gridSizeCm={gridSizeCm}
+            gridSizeCm={boxSizeCm}
             buildCubes={buildCubes}
             onAddCube={onAddBuildCube}
             onRemoveCube={onRemoveBuildCube}

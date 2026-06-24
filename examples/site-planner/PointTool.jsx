@@ -87,7 +87,9 @@ export default function PointTool({
   function handleFloorDown(e) {
     if (!active) { onDeselect(); return }
     e.stopPropagation()
-    onCreate({ x: e.point.x, z: e.point.z })
+    const point = { x: e.point.x, z: e.point.z }
+    if (isValid && !isValid(point)) return
+    onCreate(point)
   }
 
   return (

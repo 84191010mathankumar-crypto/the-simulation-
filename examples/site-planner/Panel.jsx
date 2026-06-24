@@ -134,9 +134,11 @@ export default function Panel({
   gantries, arms, grids, zones, storageAreas,
   buildCubes, onRemoveBuildCube,
   gridSizeCm, onChangeGridSize,
+  boxSizeCm, onChangeBoxSize,
   activeTool, setActiveTool,
   selectedId,
   onSelectGantry, onDeleteGantry,
+  onAddArm,
   onSelectArm, onDeleteArm,
   onSelectGrid, onDeleteGrid,
   onSelectZone, onDeleteZone,
@@ -289,12 +291,12 @@ export default function Panel({
         <ToolSection
           num="02"
           title="Robo arms"
-          hint="Click a point on the floor to place a robo arm base. Ring is green when on-grid and outside restricted zones."
-          activatingLabel="Click floor to place…"
-          active={activeTool === 'arm'}
-          onToggle={() => toggleTool('arm')}
+          hint="Click + to add a robo arm. Arms are placed along the nearest grid edge automatically."
+          activatingLabel="Adding arm…"
+          active={false}
+          onToggle={() => { if (!simulating && onAddArm) onAddArm() }}
           items={arms}
-          selectedId={activeTool === 'arm' ? null : selectedId}
+          selectedId={selectedId}
           onSelectItem={onSelectArm}
           onDeleteItem={onDeleteArm}
           renderLabel={(it, i) => `Arm ${i + 1}`}
@@ -358,6 +360,22 @@ export default function Panel({
           onDeleteItem={onDeleteStorage}
           renderLabel={(it, i) => `Storage ${i + 1}`}
         >
+          <div className="settings-row inline">
+            <span className="setting-label">Box unit</span>
+            <input
+              className="setting-input"
+              type="number"
+              min={10}
+              max={500}
+              step={10}
+              value={boxSizeCm}
+              onChange={(e) => {
+                const v = Math.max(10, Math.min(500, parseInt(e.target.value, 10) || 60))
+                onChangeBoxSize(v)
+              }}
+            />
+            <span className="setting-unit">cm</span>
+          </div>
           {storageWarning}
           {missing === 0 && (simStats?.needed ?? 0) > 0 && (
             <div className="sim-ok">✓ {simStats.available} boxes available · {simStats.needed} needed</div>
