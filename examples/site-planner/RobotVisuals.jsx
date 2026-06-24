@@ -24,7 +24,7 @@ export function GantryRobotVisual({ rect, pillarSpacing = 6 }) {
   const depth = Math.max(0.4, rect.maxZ - rect.minZ)
   const cx = (rect.minX + rect.maxX) / 2
   const cz = (rect.minZ + rect.maxZ) / 2
-  const legHeight = THREE.MathUtils.clamp(Math.min(width, depth) * 0.22, 2.4, 4.5)
+  const legHeight = 6  // 600 cm default
   const legR = 0.09
 
   // Pillar X positions along the long rails (which run along X at the two Z
@@ -175,6 +175,7 @@ export function StorageVisual({ rect, gridSizeCm = 60, hiddenKeys = null }) {
       args={[undefined, undefined, positions.length]}
       castShadow
       receiveShadow
+      frustumCulled={false}
     >
       <boxGeometry args={[side, side, side]} />
       <meshStandardMaterial color="#92400e" metalness={0.05} roughness={0.88} />

@@ -73,6 +73,7 @@ function inArea(x, z, g) {
   return x >= g.minX && x <= g.maxX && z >= g.minZ && z <= g.maxZ
 }
 
+
 /**
  * Build the scheduler job from the current plan.
  *

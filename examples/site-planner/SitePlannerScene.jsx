@@ -67,7 +67,7 @@ function CameraFit({ bounds }) {
   return null
 }
 
-function SiteModel({ onBoundsReady }) {
+function SiteModel({ onBoundsReady, opacity = 1 }) {
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}model/model-tex.gltf`)
 
   useEffect(() => {
@@ -78,6 +78,21 @@ function SiteModel({ onBoundsReady }) {
     box.getCenter(center)
     onBoundsReady({ size, center })
   }, [scene, onBoundsReady])
+
+  useEffect(() => {
+    scene.traverse((obj) => {
+      if (!obj.isMesh || !obj.material) return
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      mats.forEach((m) => {
+        // Only the flat satellite map material — leave buildings untouched
+        if (m.name === 'kulture site (1)') {
+          m.transparent = opacity < 1
+          m.opacity = opacity
+          m.needsUpdate = true
+        }
+      })
+    })
+  }, [scene, opacity])
 
   return <primitive object={scene} />
 }
@@ -99,7 +114,7 @@ function Loading() {
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
-  selectedId, showModel = true, gridSizeCm = 100, isArmValid,
+  selectedId, showModel = true, modelOpacity = 1, gridSizeCm = 100, boxSizeCm = 60, isArmValid,
   simulating, simRobots, simBoxes, gantryInstances = [], activeGantryIds,
   consumedSourceKeys, schedulers = [], registerSimMeshRef,
   onCreateGantry, onSelectGantry, onUpdateGantry, onDeleteGantry,
@@ -112,9 +127,14 @@ export default function SitePlannerScene({
   const [bounds, setBounds] = useState(null)
 
   const groundSize = useMemo(() => {
-    if (!bounds) return 40
-    return Math.max(bounds.size.x, bounds.size.z) * 1.6 + 4
-  }, [bounds])
+    if (bounds) return Math.max(bounds.size.x, bounds.size.z) * 1.6 + 4
+    // When the site model is hidden, derive the floor plane size from the
+    // actual scene items so clicks register across the full site footprint.
+    const rects = [...gantries, ...grids]
+    if (rects.length === 0) return 200
+    const abs = rects.flatMap((r) => [Math.abs(r.minX), Math.abs(r.maxX), Math.abs(r.minZ), Math.abs(r.maxZ)])
+    return Math.max(...abs) * 2 + 20
+  }, [bounds, gantries, grids])
 
   return (
     <div className="scene-wrap">
@@ -141,7 +161,7 @@ export default function SitePlannerScene({
 
         {showModel && (
           <Suspense fallback={<Loading />}>
-            <SiteModel onBoundsReady={setBounds} />
+            <SiteModel onBoundsReady={setBounds} opacity={modelOpacity} />
           </Suspense>
         )}
         <CameraFit bounds={bounds} />
@@ -218,7 +238,7 @@ export default function SitePlannerScene({
             renderRobot={(rect) => (
               <StorageVisual
                 rect={rect}
-                gridSizeCm={gridSizeCm}
+                gridSizeCm={boxSizeCm}
                 hiddenKeys={simulating ? consumedSourceKeys : null}
               />
             )}
@@ -260,7 +280,7 @@ export default function SitePlannerScene({
           <BuildResultTool
             active={!simulating && activeTool === 'build'}
             grids={grids}
-            gridSizeCm={gridSizeCm}
+            gridSizeCm={boxSizeCm}
             buildCubes={buildCubes}
             onAddCube={onAddBuildCube}
             onRemoveCube={onRemoveBuildCube}

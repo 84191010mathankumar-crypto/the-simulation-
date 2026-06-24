@@ -10,6 +10,10 @@ import '../warehouse/Panel.css'
 import './site-planner.css'
 
 const round = (n) => Math.round(n * 100) / 100
+
+// Minimum centre-to-centre distance between arm bases (metres).
+// The KR210 body extends ~0.9 m from its axis; 2.5 m gives a clear gap.
+const MIN_ARM_SPACING = 2.5
 const CONFIG_URL = `${import.meta.env.BASE_URL}site-config.json`
 
 function bumpCounter(nextId, type, id) {
@@ -24,14 +28,16 @@ function App() {
   const [zones, setZones]             = useState([])
   const [storageAreas, setStorage]    = useState([])
   const [buildCubes, setBuildCubes]   = useState([])
-  const [gridSizeCm, setGridSizeCm]   = useState(60)
+  const [gridSizeCm, setGridSizeCm]   = useState(200)
+  const [boxSizeCm, setBoxSizeCm]     = useState(60)
   const [activeTool, setActiveTool]   = useState(null)
   const [selectedId, setSelectedId]   = useState(null)
   const [loadStatus, setLoadStatus]   = useState('loading')
   const [showModel, setShowModel]     = useState(false)
+  const [modelOpacity, setModelOpacity] = useState(1)
   const [simulating, setSimulating]   = useState(false)
   const [simDone, setSimDone]         = useState(false)
-  const [robotType, setRobotType]     = useState('arms')   // 'arms' | 'gantry'
+  const [robotType, setRobotType]     = useState('gantry') // 'arms' | 'gantry'
   const [simProgress, setSimProgress] = useState({ pending: 0, assigned: 0, done: 0 })
 
   const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1 })
@@ -62,6 +68,7 @@ function App() {
         setStorage(s)
         setBuildCubes(b)
         if (data.gridSizeCm) setGridSizeCm(data.gridSizeCm)
+        if (data.boxSizeCm) setBoxSizeCm(data.boxSizeCm)
         setLoadStatus('loaded')
       })
       .catch(() => setLoadStatus('error'))
@@ -83,8 +90,49 @@ function App() {
   }
 
   // ── Robo arms ─────────────────────────────────────────────────
+  // All arms sit on the south edge (z = grid.minZ - 0.5), advancing
+  // left-to-right by MIN_ARM_SPACING * 2 (5 m) per arm.
+  const onAddArm = useCallback(() => {
+    if (grids.length === 0) {
+      setArms((prev) => [...prev, { id: makeId('arm'), x: 0, z: 0 }])
+      return
+    }
+
+    const g = grids.reduce((best, cur) => {
+      const area = (cur.maxX - cur.minX) * (cur.maxZ - cur.minZ)
+      return (!best || area > (best.maxX - best.minX) * (best.maxZ - best.minZ)) ? cur : best
+    }, null)
+
+    const OFFSET = 0.5
+    const STEP = MIN_ARM_SPACING * 2  // 5 m between arms
+
+    setArms((prev) => {
+      const newZ = g.maxZ + OFFSET   // maxZ is the front/near edge (bottom of screen)
+      // Advance slot index until the x position doesn't land inside any storage area
+      let slot = prev.length
+      let newX
+      for (let attempt = 0; attempt < 50; attempt++) {
+        newX = round(g.minX + STEP + slot * STEP * 2)
+        const blocked = storageAreas.some(
+          (s) => newX >= s.minX && newX <= s.maxX && newZ >= s.minZ && newZ <= s.maxZ
+        )
+        if (!blocked) break
+        slot++
+      }
+      return [...prev, { id: makeId('arm'), x: newX, z: newZ }]
+    })
+  }, [grids, storageAreas])
+
   const onCreateArm = (point) => {
-    setArms((a) => [...a, { id: makeId('arm'), ...point }])
+    // Canvas-click: snap z to the front edge (maxZ + 0.5).
+    if (grids.length > 0) {
+      const g = grids.reduce((best, cur) => {
+        const area = (cur.maxX - cur.minX) * (cur.maxZ - cur.minZ)
+        return (!best || area > (best.maxX - best.minX) * (best.maxZ - best.minZ)) ? cur : best
+      }, null)
+      point = { x: point.x, z: g.maxZ + 0.5 }
+    }
+    setArms((prev) => [...prev, { id: makeId('arm'), ...point }])
     setActiveTool(null)
   }
   const onUpdateArm = (id, point) =>
@@ -146,35 +194,136 @@ function App() {
 
   const onDeselect = () => setSelectedId(null)
 
-  // Arm is valid when it lies inside at least one grid AND outside all restricted zones.
+  // Arm is valid when it is outside all restricted zones and at least
+  // MIN_ARM_SPACING away from every other arm.  Grid membership is NOT required
+  // — arms are intentionally placed just outside the grid edge.
   const isArmValid = useCallback((arm) => {
-    const onGrid = grids.some((g) =>
-      arm.x >= g.minX && arm.x <= g.maxX && arm.z >= g.minZ && arm.z <= g.maxZ
-    )
     const blocked = zones.some((z) =>
       arm.x >= z.minX && arm.x <= z.maxX && arm.z >= z.minZ && arm.z <= z.maxZ
     )
-    return onGrid && !blocked
-  }, [grids, zones])
+    // arm.id is undefined for a proposed new placement → checks against all existing arms.
+    const tooClose = arms.some((a) =>
+      a.id !== arm.id && Math.hypot(a.x - arm.x, a.z - arm.z) < MIN_ARM_SPACING
+    )
+    return !blocked && !tooClose
+  }, [zones, arms])
+
+  // Auto-row: when arms overlap, snap the whole row just outside the nearest
+  // edge of the nearest grid, starting at the closest corner and extending
+  // along the edge — so arms are parallel to the grid but outside it.
+  const justSpread = useRef(false)
+  useEffect(() => {
+    if (justSpread.current) { justSpread.current = false; return }
+    if (arms.length < 2) return
+    const anyOverlap = arms.some((a, i) =>
+      arms.some((b, j) => j > i && Math.hypot(a.x - b.x, a.z - b.z) < MIN_ARM_SPACING)
+    )
+    if (!anyOverlap) return
+
+    const moved = arms.map((a) => ({ ...a }))
+    const xs = moved.map((a) => a.x)
+    const zs = moved.map((a) => a.z)
+    const cx = xs.reduce((s, v) => s + v, 0) / xs.length
+    const cz = zs.reduce((s, v) => s + v, 0) / zs.length
+
+    if (grids.length > 0) {
+      // Find the grid whose boundary is nearest to the arm cluster centroid.
+      const g = grids.reduce((best, cur) => {
+        const dx = Math.max(0, cur.minX - cx, cx - cur.maxX)
+        const dz = Math.max(0, cur.minZ - cz, cz - cur.maxZ)
+        const d  = dx * dx + dz * dz
+        return (!best || d < best.d) ? { g: cur, d } : best
+      }, null).g
+
+      // Which edge of that grid is closest to the arm cluster?
+      const dLeft   = Math.abs(cx - g.minX)
+      const dRight  = Math.abs(cx - g.maxX)
+      const dTop    = Math.abs(cz - g.minZ)
+      const dBottom = Math.abs(cz - g.maxZ)
+      const nearest = Math.min(dLeft, dRight, dTop, dBottom)
+
+      // Place arms OUTSIDE the nearest edge, starting from the closest corner.
+      const OFFSET = 0.5  // metres outside the grid boundary
+      if (nearest === dLeft || nearest === dRight) {
+        // Vertical edge (left or right) — row runs along Z outside the grid.
+        const fx = nearest === dLeft ? g.minX - OFFSET : g.maxX + OFFSET
+        // Start from whichever Z corner is nearest to the arm cluster.
+        if (cz >= (g.minZ + g.maxZ) / 2) {
+          // Near the bottom corner → arm 0 at maxZ, extend upward (decreasing Z)
+          moved.forEach((arm, i) => { arm.x = fx; arm.z = g.maxZ - i * MIN_ARM_SPACING })
+        } else {
+          // Near the top corner → arm 0 at minZ, extend downward (increasing Z)
+          moved.forEach((arm, i) => { arm.x = fx; arm.z = g.minZ + i * MIN_ARM_SPACING })
+        }
+      } else {
+        // Horizontal edge (top or bottom) — row runs along X outside the grid.
+        const fz = nearest === dTop ? g.minZ - OFFSET : g.maxZ + OFFSET
+        // Start from whichever X corner is nearest to the arm cluster.
+        if (cx >= (g.minX + g.maxX) / 2) {
+          // Near the right corner → arm 0 at maxX, extend leftward (decreasing X)
+          moved.forEach((arm, i) => { arm.x = g.maxX - i * MIN_ARM_SPACING; arm.z = fz })
+        } else {
+          // Near the left corner → arm 0 at minX, extend rightward (increasing X)
+          moved.forEach((arm, i) => { arm.x = g.minX + i * MIN_ARM_SPACING; arm.z = fz })
+        }
+      }
+    } else {
+      // No grids yet — fall back to dominant-axis row.
+      const xRange = Math.max(...xs) - Math.min(...xs)
+      const zRange = Math.max(...zs) - Math.min(...zs)
+      if (xRange >= zRange) {
+        moved.sort((a, b) => a.x - b.x)
+        const avgZ = zs.reduce((s, v) => s + v, 0) / zs.length
+        moved.forEach((arm, i) => { arm.x = moved[0].x + i * MIN_ARM_SPACING; arm.z = avgZ })
+      } else {
+        moved.sort((a, b) => a.z - b.z)
+        const avgX = xs.reduce((s, v) => s + v, 0) / xs.length
+        moved.forEach((arm, i) => { arm.x = avgX; arm.z = moved[0].z + i * MIN_ARM_SPACING })
+      }
+    }
+
+    justSpread.current = true
+    setArms(moved.map(({ id, x, z }) => ({ id, x, z })))
+  }, [arms, grids])
 
   // ── Simulation ─────────────────────────────────────────────────
   // Storage areas supply boxes; build cubes are the targets.  The arms ride
   // AGVs and follow grid lines (handled by the lib AnimationController) while
   // a warehouse-style scheduler assigns the pick-and-place tasks.
-  const unit = gridSizeCm / 100
+  const unit = boxSizeCm / 100
+  const gridUnit = gridSizeCm / 100
 
   // Anchor the AGV's grid lattice to the floor grid's cell centres so the
   // robots travel along the same lines the boxes sit on.
+  // Origin at the grid's top-left corner so snap values land exactly on the
+  // visible grid lines (minX, minX+unit, minX+2*unit, …) rather than on
+  // cell centres (which are halfway between lines).
   const gridOrigin = useMemo(() => {
     const g = grids[0]
     if (!g) return [0, 0]
-    return [g.minX + unit / 2, g.minZ + unit / 2]
-  }, [grids, unit])
+    return [g.minX, g.minZ]
+  }, [grids])
 
   const sim = useMemo(
     () => buildSimulation({ buildCubes, storageAreas, unit, gantries, robotMode: robotType }),
     [buildCubes, storageAreas, unit, gantries, robotType]
   )
+
+  // Give every robot a unique X travel lane so no two robots ever share the
+  // same grid column during transit.  With 7 arms landing in only 3 snapped
+  // columns (65.36, 67.36, 69.36), multiple robots get identical BFS paths
+  // and physically overlap.  Spreading across 7 consecutive 2 m columns
+  // (right-to-left from the rightmost arm's column) gives each robot a private
+  // lane while staying inside the grid boundary.
+  const laneXMap = useMemo(() => {
+    if (!grids[0] || gridUnit === 0 || arms.length === 0) return new Map()
+    const sorted = [...arms].sort((a, b) => a.x - b.x)
+    const rightCol = Math.round((sorted[sorted.length - 1].x - gridOrigin[0]) / gridUnit)
+    return new Map(sorted.map((arm, i) => [
+      arm.id,
+      gridOrigin[0] + (rightCol - (sorted.length - 1 - i)) * gridUnit,
+    ]))
+  }, [arms, grids, gridOrigin, gridUnit])
 
   // One stable store per arm — created on demand, reused across renders so a
   // loaded URDF isn't thrown away when an unrelated bit of state changes.
@@ -182,25 +331,30 @@ function App() {
   const simRobots = useMemo(() => arms.map((a) => {
     let store = storesRef.current.get(a.id)
     if (!store) { store = createRobotStore(); storesRef.current.set(a.id, store) }
-    return { id: a.id, store, home: [a.x, 0, a.z] }
-  }), [arms])
+    // Use lane-assigned X in the scheduler's home so canStartSafely and
+    // preAssignTasks see positions that match the actual platform placement.
+    const laneX = laneXMap.get(a.id)
+      ?? (Math.round((a.x - gridOrigin[0]) / gridUnit) * gridUnit + gridOrigin[0])
+    return { id: a.id, store, home: [laneX, 0, a.z] }
+  }), [arms, laneXMap, gridOrigin, gridUnit])
 
   // Push mobile-mode + grid settings into each arm's store as they change.
   useEffect(() => {
     const zoneList = zones.map((z) => ({ minX: z.minX, maxX: z.maxX, minZ: z.minZ, maxZ: z.maxZ }))
     for (const r of simRobots) {
+      const [hx, , hz] = r.home  // hx is already the lane-unique, grid-snapped X
       r.store.setState({
         mobileMode: true,
         parkingRef: 'self',
         gridMovement: true,
-        gridCell: unit,
+        gridCell: gridUnit,
         gridOrigin,
         zones: zoneList,
-        platformPose: { position: r.home, rotation: [0, 0, 0] },
-        homePlatform: { position: r.home, rotation: [0, 0, 0] },
+        platformPose: { position: [hx, 0, hz], rotation: [0, 0, 0] },
+        homePlatform: { position: [hx, 0, hz], rotation: [0, 0, 0] },
       })
     }
-  }, [simRobots, unit, gridOrigin, zones])
+  }, [simRobots, unit, gridOrigin, zones, gridUnit])
 
   // Each carried box exposes a live ref into its scene mesh for the scheduler.
   const simMeshRefs = useRef(new Map())
@@ -308,6 +462,7 @@ function App() {
 
   const config = useMemo(() => ({
     gridSizeCm,
+    boxSizeCm,
     gantryRobots: gantries.map(({ id, minX, maxX, minZ, maxZ }) => ({
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
@@ -322,7 +477,7 @@ function App() {
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
     buildCubes: buildCubes.map(({ id, x, z, layer }) => ({ id, x: round(x), z: round(z), layer })),
-  }), [gridSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes])
+  }), [gridSizeCm, boxSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes])
 
   return (
     <div className="planner-app">
@@ -330,14 +485,17 @@ function App() {
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onRemoveBuildCube={onRemoveBuildCube}
         gridSizeCm={gridSizeCm} onChangeGridSize={setGridSizeCm}
+        boxSizeCm={boxSizeCm} onChangeBoxSize={setBoxSizeCm}
         activeTool={activeTool} setActiveTool={setActiveTool}
         selectedId={selectedId}
         onSelectGantry={onSelectGantry} onDeleteGantry={onDeleteGantry}
+        onAddArm={onAddArm}
         onSelectArm={onSelectArm} onDeleteArm={onDeleteArm}
         onSelectGrid={onSelectGrid} onDeleteGrid={onDeleteGrid}
         onSelectZone={onSelectZone} onDeleteZone={onDeleteZone}
         onSelectStorage={onSelectStorage} onDeleteStorage={onDeleteStorage}
         showModel={showModel} onToggleModel={() => setShowModel((v) => !v)}
+        modelOpacity={modelOpacity} onChangeModelOpacity={setModelOpacity}
         config={config} loadStatus={loadStatus} onReload={loadConfig}
         simulating={simulating} simDone={simDone} onStartSim={onStartSim} onStopSim={onStopSim}
         simStats={sim} simProgress={simProgress} armCount={arms.length}
@@ -345,11 +503,13 @@ function App() {
       />
       <SitePlannerScene
         showModel={showModel}
+        modelOpacity={modelOpacity}
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onAddBuildCube={onAddBuildCube} onRemoveBuildCube={onRemoveBuildCube}
         selectedId={selectedId}
         gridSizeCm={gridSizeCm}
+        boxSizeCm={boxSizeCm}
         isArmValid={isArmValid}
         simulating={simulating} simRobots={simRobots} simBoxes={simBoxesForScene}
         gantryInstances={gantryInstances} activeGantryIds={activeGantryIds}

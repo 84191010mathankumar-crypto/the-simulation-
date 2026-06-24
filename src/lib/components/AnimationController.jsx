@@ -361,7 +361,7 @@ export default function AnimationController() {
     const {
       animState, robotRef, fromAngles, toAngles, fromPlatform, toPlatform,
       followTarget, startObject, endObject, mobileMode,
-      platformPose, parkingRef, platformPath,
+      platformPose, parkingRef, platformPath, paused,
     } = store
 
     // ── Follow mode: live IK as the user drags the target ──────────────────
@@ -431,6 +431,16 @@ export default function AnimationController() {
       return
     }
 
+    // ── Collision hold: freeze ALL delivery animation while paused ───────────
+    // resolveCollisions() sets paused=true whenever another robot's arm is
+    // extended within 5.4 m (2×ARM_REACH).  Freezing every delivery state
+    // (not just the platform-moving ones) means arm-work (grabbing/releasing)
+    // also holds when the scheduler flags a spatial conflict — prevents mesh
+    // intersection even when two robots converge on the same storage area.
+    if (paused && animState !== 'idle') {
+      return
+    }
+
     // ── Advance segment ────────────────────────────────────────────────────
     const duration = SPEED[animState] || 1.0
     progressRef.current = Math.min(1, progressRef.current + delta / duration)
@@ -471,9 +481,21 @@ function _solveSegment(useStore, store, target, currentAngles, currentPlatform) 
   const obj = target === 'start' ? startObject : endObject
   const { faceCenter, toolZ } = computeGrabPose(obj.position, obj.rotation, obj.grabVector)
 
-  const targetPlatform = mobileMode
+  let targetPlatform = mobileMode
     ? computePlatformPoseFor(obj.position, currentPlatform.position, parkingRef)
     : currentPlatform
+
+  // Snap the parking position to the nearest grid-line intersection so the
+  // destination is always a grid node.  Combined with the snapped home
+  // position this eliminates all off-grid stubs and keeps the platform on
+  // visible grid lines for its entire journey.
+  if (mobileMode && store.gridMovement && store.gridCell) {
+    const cell = store.gridCell
+    const [ox, oz] = store.gridOrigin || [0, 0]
+    const px = Math.round((targetPlatform.position[0] - ox) / cell) * cell + ox
+    const pz = Math.round((targetPlatform.position[2] - oz) / cell) * cell + oz
+    targetPlatform = { ...targetPlatform, position: [px, targetPlatform.position[1], pz] }
+  }
 
   addLog('info', `IK: solving for ${target.toUpperCase()}`, {
     X: faceCenter.x.toFixed(3),

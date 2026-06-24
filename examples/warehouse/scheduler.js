@@ -35,6 +35,32 @@ function dist2(a, b) {
   return dx * dx + dz * dz
 }
 
+// States where the AGV platform is actively moving (vs. stationary arm-only motion).
+const MOVING_STATES = new Set(['moving_to_start', 'moving_to_end', 'returning'])
+
+// States where the robot is in the work zone (arm is extended toward workspace).
+// 'returning' is excluded — the robot is moving AWAY from the work area.
+const DELIVERY_STATES = new Set(['moving_to_start', 'grabbing', 'moving_to_end', 'releasing'])
+
+// Urgency: higher = more important to keep moving (yield to higher-urgency robots).
+// 'returning' is HIGHEST — a robot that just placed its box must be allowed to
+// clear the work area before any new robot approaches.  Without this, the
+// returning robot was paused AT the build site while an incoming robot drove
+// straight into it, causing arm-mesh intersection.
+function urgencyOf(animState) {
+  if (animState === 'returning') return 4           // must leave — never block
+  if (animState === 'releasing') return 3           // almost done placing
+  if (animState === 'moving_to_end') return 2       // carrying box, yields to above
+  if (animState === 'moving_to_start' || animState === 'grabbing') return 1
+  return 0
+}
+
+// How close two robot centres can get before the lower-priority one yields (metres).
+const COLLISION_RADIUS = 2.0
+
+// KR210 maximum arm reach (metres).
+const ARM_REACH = 2.7
+
 const _toolPos  = new THREE.Vector3()
 const _toolQuat = new THREE.Quaternion()
 const _outPos   = new THREE.Vector3()
@@ -69,6 +95,7 @@ export function createScheduler({ robots, boxes, onLog }) {
     box: b,
     state: 'pending',                 // 'pending' | 'assigned' | 'done'
     assignedTo: null,
+    ownerId: null,                    // set by preAssignTasks() — Voronoi robot territory
     // currentWorld is updated as the box is moved.  Initialised to `from`.
     currentWorld:  [...b.from],
     startRotation: [...(b.fromRotation || [0, 0, 0])],
@@ -77,6 +104,24 @@ export function createScheduler({ robots, boxes, onLog }) {
     // Filled in on entry to moving_to_end (see driveCarriedMesh below).
     carry: null, // { localPos: Vector3, startQuat: Quaternion, endQuat: Quaternion }
   }))
+
+  // Round-robin task assignment: distribute build targets evenly across all
+  // robots regardless of home-to-target distances.  Pure nearest-home Voronoi
+  // fails when all homes are clustered together (as in the site-planner
+  // layout) because every task maps to the same robot.  Round-robin gives
+  // each robot ~(total/N) tasks so they can all work in parallel.
+  ;(function preAssignTasks() {
+    if (robots.length === 0) return
+    if (robots.length === 1) { for (const t of tasks) t.ownerId = robots[0].id; return }
+    // Sort tasks spatially (by build-target x, then z) for a consistent,
+    // spatially-coherent distribution across the robot row.
+    const sorted = tasks.slice().sort((a, b) => {
+      const dx = a.box.to[0] - b.box.to[0]
+      if (Math.abs(dx) > 0.01) return dx
+      return a.box.to[2] - b.box.to[2]
+    })
+    sorted.forEach((t, i) => { t.ownerId = robots[i % robots.length].id })
+  })()
 
   // per-robot bookkeeping — which task they're currently doing.
   const robotBusy = new Map()      // robotId -> task
@@ -112,24 +157,52 @@ export function createScheduler({ robots, boxes, onLog }) {
     robotPrevState.clear()
     for (const r of robots) {
       r.store.getState().resetToHome()
-      r.store.setState({ animState: 'idle', animProgress: 0 })
+      r.store.setState({ animState: 'idle', animProgress: 0, paused: false })
     }
   }
 
-  /* Try to give every idle robot something to do. */
+  /* Can robot `r` start a delivery cycle right now?
+   *
+   * Only blocks if another robot's platform is physically overlapping our
+   * home position right now (within COLLISION_RADIUS = 2 m).  This prevents
+   * two platforms occupying the same grid cell at departure time.
+   *
+   * All other spatial safety — arm-exclusion zones, path conflicts — is
+   * managed in real time by resolveCollisions().  Home-to-home distance is
+   * NOT used as a gate; in layouts where all homes are clustered within a
+   * few metres of each other, a home-distance gate serialises every robot
+   * into a single queue and prevents any parallel work. */
+  function canStartSafely(robot) {
+    if (!robot.home) return true
+    const [rhx, , rhz] = robot.home
+    for (const r of robots) {
+      if (r.id === robot.id) continue
+      const rState = r.store.getState()
+      if (rState.animState === 'idle') continue   // folded arm at home — no threat
+      const [px, , pz] = rState.platformPose.position
+      const dx = rhx - px, dz = rhz - pz
+      if (dx * dx + dz * dz < COLLISION_RADIUS * COLLISION_RADIUS) return false
+    }
+    return true
+  }
+
+  /* Activate every idle robot that can safely start without arm-mesh
+   * collision.  Robots whose homes are > 5.4 m apart (every 3rd robot in a
+   * 2.5 m-spaced row) run in parallel on entirely separate grid paths;
+   * closer neighbours queue until the active one exits DELIVERY_STATES. */
   function pump() {
     if (!running) return
+
     for (const r of robots) {
       if (robotBusy.has(r.id)) continue
-      // Skip robots whose URDF hasn't finished loading yet — otherwise the
-      // AnimationController has no robotRef and silently burns through the
-      // pick-and-place state machine without animating.
       if (!r.store.getState().robotLoaded) continue
+      if (!canStartSafely(r)) continue
       const next = pickTask(r)
       if (!next) continue
       assign(r, next)
+      // No break — evaluate all robots; multiple can start in the same tick.
     }
-    // If everything is done and no robots are busy, we're finished.
+
     if (robotBusy.size === 0 && tasks.every((t) => t.state === 'done')) {
       running = false
       log('ok', 'All tasks complete')
@@ -137,22 +210,33 @@ export function createScheduler({ robots, boxes, onLog }) {
   }
 
   function pickTask(robot) {
-    // Only consider the lowest-priority tier that still has pending tasks.
-    // This enforces build dependencies (walls before roof, roof before chimney)
-    // without forcing strictly serial execution within a tier.
+    // Phase 1: only consider tasks in THIS robot's Voronoi territory.
+    // This ensures each arm delivers boxes in its own spatial zone so arms
+    // never reach across into a neighbour's zone during the delivery phase.
     let minPriority = Infinity
     for (const t of tasks) {
-      if (t.state === 'pending' && t.priority < minPriority) minPriority = t.priority
+      if (t.state === 'pending' && t.ownerId === robot.id && t.priority < minPriority)
+        minPriority = t.priority
+    }
+
+    // Phase 2 (steal): robot finished its own zone — help with whatever remains.
+    // This keeps robots busy rather than sitting idle while neighbours finish up.
+    let stealing = false
+    if (minPriority === Infinity) {
+      stealing = true
+      for (const t of tasks) {
+        if (t.state === 'pending' && t.priority < minPriority) minPriority = t.priority
+      }
     }
     if (minPriority === Infinity) return null
 
-    // Within the active tier, the robot still grabs whichever pending box is
-    // nearest its current platform position.
+    // Within the chosen tier, pick the pending task nearest the robot's current
+    // platform position (own zone first, global fallback when stealing).
     const platPos = robot.store.getState().platformPose.position
     let best = null, bestD = Infinity
     for (const t of tasks) {
-      if (t.state !== 'pending') continue
-      if (t.priority !== minPriority) continue
+      if (t.state !== 'pending' || t.priority !== minPriority) continue
+      if (!stealing && t.ownerId !== robot.id) continue
       const d = dist2(platPos, t.currentWorld)
       if (d < bestD) { bestD = d; best = t }
     }
@@ -243,10 +327,80 @@ export function createScheduler({ robots, boxes, onLog }) {
     mesh.rotation.set(task.endRotation[0], task.endRotation[1], task.endRotation[2])
   }
 
+  // States where the arm is physically extended into the workspace.
+  // 'returning' is included because during the early part of the return trip the
+  // arm is still sweeping back from its last extended pose — it only fully folds
+  // to HOME_ANGLES at progress=1.  Treating it as extended ensures the 5.4 m
+  // exclusion zone fires before any incoming robot can enter the now-vacating
+  // work area.
+  const ARM_EXTENDED = new Set(['grabbing', 'moving_to_end', 'releasing', 'returning'])
+  // Safe distance between platforms when either arm is extended (= 2 × reach).
+  const SAFE_ARM_SQ = (ARM_REACH * 2) ** 2   // 5.4 m²
+
+  /* Checks all robot pairs and pauses the lower-priority one when they are
+   * too close.  Two rules:
+   *
+   *  ARM EXCLUSION ZONE (5.4 m): whenever either robot's arm is extended
+   *   (grabbing / moving_to_end / releasing), the other robot must stay
+   *   outside 2 × ARM_REACH.  If it's inside that radius the approaching
+   *   robot pauses — platform and arm both freeze — until the extended arm
+   *   finishes and moves away.  This prevents mesh intersection even when
+   *   two robots converge on the same storage area.
+   *
+   *  PLATFORM COLLISION (2 m): when both platforms are just travelling
+   *   (no arm extended), the narrower radius keeps them from bumping bodies. */
+  function resolveCollisions() {
+    if (robots.length < 2) return
+
+    const toPause = new Set()
+    for (let i = 0; i < robots.length; i++) {
+      for (let j = i + 1; j < robots.length; j++) {
+        const stA = robots[i].store.getState()
+        const stB = robots[j].store.getState()
+        const sa  = stA.animState, sb = stB.animState
+
+        const aExt = ARM_EXTENDED.has(sa)
+        const bExt = ARM_EXTENDED.has(sb)
+        const aMov = MOVING_STATES.has(sa)
+        const bMov = MOVING_STATES.has(sb)
+
+        if (!aExt && !bExt && !aMov && !bMov) continue   // both idle — nothing to do
+
+        const posA = stA.platformPose.position
+        const posB = stB.platformPose.position
+        const dx = posA[0] - posB[0]
+        const dz = posA[2] - posB[2]
+        const d2 = dx * dx + dz * dz
+
+        if ((aExt || bExt) && d2 < SAFE_ARM_SQ) {
+          // Arm-exclusion zone: pause whichever has lower urgency.
+          const ua = urgencyOf(sa), ub = urgencyOf(sb)
+          if (ua < ub) toPause.add(i)
+          else if (ub < ua) toPause.add(j)
+          else toPause.add(j)   // tie → pause higher index
+        } else if (aMov && bMov && d2 < COLLISION_RADIUS * COLLISION_RADIUS) {
+          // Platform-body collision: both moving, pause lower-urgency mover.
+          const ua = urgencyOf(sa), ub = urgencyOf(sb)
+          if (ua < ub) toPause.add(i)
+          else toPause.add(j)
+        }
+      }
+    }
+
+    for (let i = 0; i < robots.length; i++) {
+      const shouldPause = toPause.has(i)
+      if (robots[i].store.getState().paused !== shouldPause) {
+        robots[i].store.setState({ paused: shouldPause })
+      }
+    }
+  }
+
   /* Called each frame from a React useFrame to drive the per-robot box
    * transforms and observe state transitions. */
   function tick() {
     if (!running) return
+
+    resolveCollisions()
 
     for (const r of robots) {
       const state = r.store.getState()
@@ -267,22 +421,15 @@ export function createScheduler({ robots, boxes, onLog }) {
             task.startRotation = [...task.endRotation]
             task.carry = null
           }
-          // On entering 'returning', try to short-circuit straight to the
-          // next pickup instead of driving home.  We assign() right here so
-          // that other robots transitioning to 'returning' in this same tick
-          // see the task as 'assigned' and don't all try to claim it.  If no
-          // task is available, leave animState='returning' so the
-          // AnimationController finishes driving this robot home.
+          // On entering 'returning': mark task done and free the robot.
+          // pump() (called at the end of every tick) will immediately start
+          // the next robot's pickup because delivering-count just dropped to 0.
+          // The returning robot travels home while the next one heads to storage
+          // — opposite directions, no workspace conflict.
           if (st === 'returning') {
             task.state = 'done'
             log('ok', `Robot ${r.id} done with box ${task.box.id}`)
             robotBusy.delete(r.id)
-
-            const next = pickTask(r)
-            if (next) {
-              assign(r, next)
-              robotPrevState.set(r.id, 'moving_to_start')
-            }
             continue
           }
           if (st === 'idle') {
