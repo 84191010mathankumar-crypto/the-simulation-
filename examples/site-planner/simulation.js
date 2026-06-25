@@ -272,10 +272,12 @@ function panelRunSegments(run) {
  *
  * `panels`           — drawn wall runs (targets).
  * `panelStorageAreas`— rectangles filled with lying-flat panels (sources).
+ * `gantries`         — gantry areas; panel targets inside a gantry area are
+ *                      assigned to that gantry instead of the arm fleet.
  *
  * Returns panelBoxes (scheduler tasks), needed, available, missing.
  */
-export function buildPanelSimulation({ panels, panelStorageAreas }) {
+export function buildPanelSimulation({ panels, panelStorageAreas, gantries = [] }) {
   // Decompose every panel run into individual segments.
   const targets = []
   for (const run of panels) {
@@ -314,6 +316,12 @@ export function buildPanelSimulation({ panels, panelStorageAreas }) {
     const w = tgt.axis === 'x' ? tgt.size : PANEL_THICKNESS
     const d = tgt.axis === 'z' ? tgt.size : PANEL_THICKNESS
 
+    // Assign to a gantry if the target position falls inside its area.
+    let robot = { type: 'arm' }
+    for (const g of gantries) {
+      if (inArea(tgt.cx, tgt.cz, g)) { robot = { type: 'gantry', gantryId: g.id }; break }
+    }
+
     panelBoxes.push({
       id: `simpanel-${tgt.id}`,
       size: [w, PANEL_HEIGHT, d],
@@ -323,7 +331,7 @@ export function buildPanelSimulation({ panels, panelStorageAreas }) {
       toRotation:   [0, 0, 0],
       grab:     [0, 1, 0],
       priority: 0,
-      robot: { type: 'arm' },
+      robot,
       panelData: { runId: tgt.runId, segIdx: tgt.segIdx, axis: tgt.axis, size: tgt.size },
     })
   }

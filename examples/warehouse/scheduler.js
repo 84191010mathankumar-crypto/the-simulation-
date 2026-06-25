@@ -105,27 +105,36 @@ export function createScheduler({ robots, boxes, onLog }) {
     carry: null, // { localPos: Vector3, startQuat: Quaternion, endQuat: Quaternion }
   }))
 
-  // Round-robin task assignment: distribute build targets evenly across all
-  // robots regardless of home-to-target distances.  Pure nearest-home Voronoi
-  // fails when all homes are clustered together (as in the site-planner
-  // layout) because every task maps to the same robot.  Round-robin gives
-  // each robot ~(total/N) tasks so they can all work in parallel.
+  // Source-proximity territory: assign each task to the arm whose home position
+  // is physically nearest to that task's STORAGE SOURCE.  This keeps each arm
+  // in its natural spatial zone — it travels to the nearest pile, picks up,
+  // and delivers to the corresponding build target without crossing into a
+  // neighbour's lane.  Cross-path travel (and the collision pauses it causes)
+  // is minimised because arms on the right handle right-side storage and vice
+  // versa.  A "steal" fallback in pickTask handles stragglers when one arm
+  // finishes its zone before its neighbours.
   ;(function preAssignTasks() {
     if (robots.length === 0) return
-    if (robots.length === 1) { for (const t of tasks) t.ownerId = robots[0].id; return }
-    // Sort tasks spatially (by build-target x, then z) for a consistent,
-    // spatially-coherent distribution across the robot row.
-    const sorted = tasks.slice().sort((a, b) => {
-      const dx = a.box.to[0] - b.box.to[0]
-      if (Math.abs(dx) > 0.01) return dx
-      return a.box.to[2] - b.box.to[2]
-    })
-    sorted.forEach((t, i) => { t.ownerId = robots[i % robots.length].id })
+    for (const t of tasks) {
+      let best = robots[0]
+      let bestD = best.home ? dist2(best.home, t.box.from) : Infinity
+      for (let i = 1; i < robots.length; i++) {
+        if (!robots[i].home) continue
+        const d = dist2(robots[i].home, t.box.from)
+        if (d < bestD) { bestD = d; best = robots[i] }
+      }
+      t.ownerId = best.id
+    }
   })()
 
   // per-robot bookkeeping — which task they're currently doing.
   const robotBusy = new Map()      // robotId -> task
   const robotPrevState = new Map() // robotId -> previous animState string
+
+  // Stagger robot departures so they don't all rush the same storage cluster
+  // on the first tick.  One new robot may start every START_STAGGER_MS ms.
+  let lastStartMs = 0
+  const START_STAGGER_MS = 350
 
   let running = false
 
@@ -138,6 +147,7 @@ export function createScheduler({ robots, boxes, onLog }) {
 
   function reset() {
     running = false
+    lastStartMs = 0
     for (const t of tasks) {
       t.state = 'pending'
       t.assignedTo = null
@@ -186,12 +196,16 @@ export function createScheduler({ robots, boxes, onLog }) {
     return true
   }
 
-  /* Activate every idle robot that can safely start without arm-mesh
-   * collision.  Robots whose homes are > 5.4 m apart (every 3rd robot in a
-   * 2.5 m-spaced row) run in parallel on entirely separate grid paths;
-   * closer neighbours queue until the active one exits DELIVERY_STATES. */
+  /* Activate idle robots one at a time, staggered by START_STAGGER_MS.
+   * Releasing all robots in the same frame causes them to flood the same
+   * storage corridor simultaneously — resolveCollisions then freeze-clusters
+   * them all in place.  The stagger ensures each robot is already en route
+   * (or grabbing) before the next one departs, spreading them naturally. */
   function pump() {
     if (!running) return
+
+    const now = Date.now()
+    let started = 0
 
     for (const r of robots) {
       if (robotBusy.has(r.id)) continue
@@ -199,8 +213,14 @@ export function createScheduler({ robots, boxes, onLog }) {
       if (!canStartSafely(r)) continue
       const next = pickTask(r)
       if (!next) continue
+
+      // Only start one robot per stagger window.  Others will be picked up
+      // on the next pump() call (next frame) once the window has elapsed.
+      if (started > 0 || now - lastStartMs < START_STAGGER_MS) continue
+
       assign(r, next)
-      // No break — evaluate all robots; multiple can start in the same tick.
+      lastStartMs = now
+      started++
     }
 
     if (robotBusy.size === 0 && tasks.every((t) => t.state === 'done')) {
@@ -210,17 +230,14 @@ export function createScheduler({ robots, boxes, onLog }) {
   }
 
   function pickTask(robot) {
-    // Phase 1: only consider tasks in THIS robot's Voronoi territory.
-    // This ensures each arm delivers boxes in its own spatial zone so arms
-    // never reach across into a neighbour's zone during the delivery phase.
+    // Phase 1: only consider tasks in THIS robot's source-proximity territory.
     let minPriority = Infinity
     for (const t of tasks) {
       if (t.state === 'pending' && t.ownerId === robot.id && t.priority < minPriority)
         minPriority = t.priority
     }
 
-    // Phase 2 (steal): robot finished its own zone — help with whatever remains.
-    // This keeps robots busy rather than sitting idle while neighbours finish up.
+    // Phase 2 (steal): robot finished its own zone — pick from whatever remains.
     let stealing = false
     if (minPriority === Infinity) {
       stealing = true
@@ -230,14 +247,27 @@ export function createScheduler({ robots, boxes, onLog }) {
     }
     if (minPriority === Infinity) return null
 
-    // Within the chosen tier, pick the pending task nearest the robot's current
-    // platform position (own zone first, global fallback when stealing).
-    const platPos = robot.store.getState().platformPose.position
+    // Within the chosen priority tier, pick the pending task whose STORAGE SOURCE
+    // is nearest to the reference position.
+    //
+    // Own territory: use the arm's fixed HOME position.  Measuring from home
+    // (not the current platform position) means the arm always approaches
+    // storage from the same direction, so it naturally peels boxes from the
+    // OUTER edge of a pile inward — the closest box to the arm's side of the
+    // pile is always selected first, preventing the arm from reaching through
+    // outer boxes to grab inner ones.
+    //
+    // Steal: use the current platform position so the arm walks to whatever
+    // neighbour task is cheapest to reach from where it already is.
+    const refPos = stealing
+      ? robot.store.getState().platformPose.position
+      : (robot.home ?? robot.store.getState().platformPose.position)
+
     let best = null, bestD = Infinity
     for (const t of tasks) {
       if (t.state !== 'pending' || t.priority !== minPriority) continue
       if (!stealing && t.ownerId !== robot.id) continue
-      const d = dist2(platPos, t.currentWorld)
+      const d = dist2(refPos, t.box.from)
       if (d < bestD) { bestD = d; best = t }
     }
     return best
@@ -272,8 +302,10 @@ export function createScheduler({ robots, boxes, onLog }) {
     const mesh = task.box.meshRef?.current
     if (!mesh) return
     const st = state.animState
+    const isPanel = !!task.box.panelData
 
     if (st === 'moving_to_start' || st === 'grabbing') {
+      mesh.visible = false   // still at source — StorageVisual covers it
       const [x, y, z] = task.currentWorld
       mesh.position.set(x, y, z)
       mesh.rotation.set(task.startRotation[0], task.startRotation[1], task.startRotation[2])
@@ -281,6 +313,7 @@ export function createScheduler({ robots, boxes, onLog }) {
     }
 
     if (st === 'moving_to_end') {
+      mesh.visible = true    // robot is carrying it
       const tool = getToolLink(state.robotRef)
       if (!tool) return
 
@@ -322,18 +355,19 @@ export function createScheduler({ robots, boxes, onLog }) {
     }
 
     // releasing | returning → park at end pose
+    // Panels: hide (LineTool renders the placed wall). Boxes: keep visible (solid placed cube).
+    mesh.visible = !isPanel
     const [tx, ty, tz] = task.box.to
     mesh.position.set(tx, ty, tz)
     mesh.rotation.set(task.endRotation[0], task.endRotation[1], task.endRotation[2])
   }
 
   // States where the arm is physically extended into the workspace.
-  // 'returning' is included because during the early part of the return trip the
-  // arm is still sweeping back from its last extended pose — it only fully folds
-  // to HOME_ANGLES at progress=1.  Treating it as extended ensures the 5.4 m
-  // exclusion zone fires before any incoming robot can enter the now-vacating
-  // work area.
-  const ARM_EXTENDED = new Set(['grabbing', 'moving_to_end', 'releasing', 'returning'])
+  // 'returning' is intentionally excluded: the arm folds to HOME_ANGLES during
+  // the return trip, so its workspace footprint shrinks quickly.  Including it
+  // caused every returning arm to block its neighbour for the entire home-travel
+  // duration — the main source of cluster-pausing in dense arm rows.
+  const ARM_EXTENDED = new Set(['grabbing', 'moving_to_end', 'releasing'])
   // Safe distance between platforms when either arm is extended (= 2 × reach).
   const SAFE_ARM_SQ = (ARM_REACH * 2) ** 2   // 5.4 m²
 

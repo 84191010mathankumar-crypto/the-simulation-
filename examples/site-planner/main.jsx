@@ -345,8 +345,8 @@ function App() {
   )
 
   const panelSim = useMemo(
-    () => buildPanelSimulation({ panels, panelStorageAreas }),
-    [panels, panelStorageAreas]
+    () => buildPanelSimulation({ panels, panelStorageAreas, gantries }),
+    [panels, panelStorageAreas, gantries]
   )
 
   // Give every robot a unique X travel lane so no two robots ever share the
@@ -423,16 +423,11 @@ function App() {
     [panelSim.panelBoxes]
   )
 
-  // Source positions consumed by the run, so <StorageVisual> can hide those
-  // cubes — the pile depletes as the boxes are carried off.
-  const consumedSourceKeys = useMemo(
-    () => new Set(sim.boxes.map((b) => sourceKey(b.from))),
-    [sim.boxes]
-  )
-  const consumedPanelSourceKeys = useMemo(
-    () => new Set(panelSim.panelBoxes.map((b) => sourceKey(b.from))),
-    [panelSim.panelBoxes]
-  )
+  // Both storage sources (boxes) and panel storage sources deplete dynamically:
+  // a slot is hidden only once the robot has physically picked the item up
+  // (mesh becomes visible while being carried) or the task is done.
+  const [consumedSourceKeys, setConsumedSourceKeys]           = useState(new Set())
+  const [consumedPanelSourceKeys, setConsumedPanelSourceKeys] = useState(new Set())
 
   const pushSimLog = useCallback(() => {}, [])
 
@@ -442,10 +437,15 @@ function App() {
     () => simBoxesForScheduler.filter((b) => !b.robot || b.robot.type === 'arm'),
     [simBoxesForScheduler]
   )
-  // Combine regular box tasks and panel tasks for the arm scheduler.
+  // Panel tasks assigned to arms (those outside any gantry area).
+  const armPanelBoxes = useMemo(
+    () => panelBoxesForScheduler.filter((b) => !b.robot || b.robot.type === 'arm'),
+    [panelBoxesForScheduler]
+  )
+  // Combine regular box tasks and arm-assigned panel tasks for the arm scheduler.
   const allArmTasks = useMemo(
-    () => [...armBoxes, ...panelBoxesForScheduler],
-    [armBoxes, panelBoxesForScheduler]
+    () => [...armBoxes, ...armPanelBoxes],
+    [armBoxes, armPanelBoxes]
   )
   const armScheduler = useMemo(
     () => createScheduler({ robots: simRobots, boxes: allArmTasks, onLog: pushSimLog }),
@@ -459,21 +459,25 @@ function App() {
   const gantryInstances = useMemo(() => {
     if (robotType !== 'gantry') return []
     return gantries.map((g) => {
-      const boxes = simBoxesForScheduler.filter(
+      const cubeBoxes = simBoxesForScheduler.filter(
         (b) => b.robot && b.robot.type === 'gantry' && b.robot.gantryId === g.id
       )
-      if (boxes.length === 0) return null
+      const panelBoxesForGantry = panelBoxesForScheduler.filter(
+        (b) => b.robot && b.robot.type === 'gantry' && b.robot.gantryId === g.id
+      )
+      const allBoxes = [...cubeBoxes, ...panelBoxesForGantry]
+      if (allBoxes.length === 0) return null
       let store = gantryStoresRef.current.get(g.id)
       if (!store) { store = createGantryStore(); gantryStoresRef.current.set(g.id, store) }
       const origin = [(g.minX + g.maxX) / 2, (g.minZ + g.maxZ) / 2]
-      const scheduler = createGantryScheduler({ boxes, onLog: pushSimLog, store, origin })
+      const scheduler = createGantryScheduler({ boxes: allBoxes, onLog: pushSimLog, store, origin })
       return {
-        id: g.id, store, origin, boxes, scheduler,
+        id: g.id, store, origin, boxes: allBoxes, scheduler,
         travelX: Math.max(0.4, (g.maxX - g.minX) / 2),
         travelZ: Math.max(0.4, (g.maxZ - g.minZ) / 2),
       }
     }).filter(Boolean)
-  }, [robotType, gantries, simBoxesForScheduler, pushSimLog])
+  }, [robotType, gantries, simBoxesForScheduler, panelBoxesForScheduler, pushSimLog])
 
   const activeGantryIds = useMemo(() => new Set(gantryInstances.map((g) => g.id)), [gantryInstances])
 
@@ -496,6 +500,8 @@ function App() {
     setSimulating(false)
     setSimDone(false)
     setPlacedPanelSegments(new Set())
+    setConsumedSourceKeys(new Set())
+    setConsumedPanelSourceKeys(new Set())
     setSimProgress({ pending: sim.boxes.length, assigned: 0, done: 0 })
   }, [allSchedulers, sim.boxes.length])
 
@@ -520,21 +526,52 @@ function App() {
       setSimProgress(counts)
       if (!anyRunning && total > 0 && counts.done === total) setSimDone(true)
 
-      // Track which panel segments have been delivered so LineTool can
-      // show them as solid walls.
+      // Track depleted storage slots and placed panel segments.
+      // A slot is consumed only once the robot is visibly carrying the item
+      // (mesh.visible=true) or the task is done.
       const placed = new Set()
-      for (const task of armScheduler.tasks) {
-        if (task.state === 'done' && task.box?.panelData) {
-          placed.add(`${task.box.panelData.runId}-${task.box.panelData.segIdx}`)
+      const boxConsumed = new Set()
+      const panelConsumed = new Set()
+
+      const trackTask = (task) => {
+        const mesh = simMeshRefs.current.get(task.box.id)
+        const isCarrying = mesh?.visible === true
+        const isDone = task.state === 'done'
+
+        if (task.box?.panelData) {
+          if (isDone) {
+            placed.add(`${task.box.panelData.runId}-${task.box.panelData.segIdx}`)
+            panelConsumed.add(sourceKey(task.box.from))
+          } else if (task.state === 'assigned' && isCarrying) {
+            panelConsumed.add(sourceKey(task.box.from))
+          }
+        } else {
+          if (isDone || (task.state === 'assigned' && isCarrying)) {
+            boxConsumed.add(sourceKey(task.box.from))
+          }
         }
       }
+
+      for (const task of armScheduler.tasks) trackTask(task)
+      for (const gi of gantryInstances) {
+        for (const task of gi.scheduler.tasks) trackTask(task)
+      }
+
       setPlacedPanelSegments((prev) => {
-        if (prev.size === placed.size) return prev  // avoid re-render
+        if (prev.size === placed.size) return prev
         return placed
+      })
+      setConsumedSourceKeys((prev) => {
+        if (prev.size === boxConsumed.size) return prev
+        return boxConsumed
+      })
+      setConsumedPanelSourceKeys((prev) => {
+        if (prev.size === panelConsumed.size) return prev
+        return panelConsumed
       })
     }, 200)
     return () => clearInterval(t)
-  }, [simulating, allSchedulers, armScheduler])
+  }, [simulating, allSchedulers, armScheduler, gantryInstances])
 
   const config = useMemo(() => ({
     gridSizeCm,

@@ -18,10 +18,11 @@ export default function SimPanel({ box, registerMeshRef }) {
     if (!ref.current) return
     ref.current.position.set(fx, fy, fz)
     ref.current.rotation.set(0, 0, 0)
+    ref.current.visible = false  // hidden until the robot picks it up
   }, [fx, fy, fz])
 
   return (
-    <mesh ref={ref} castShadow>
+    <mesh ref={ref} visible={false} castShadow>
       <boxGeometry args={box.size} />
       <meshStandardMaterial color="#e2e8f0" metalness={0.12} roughness={0.55} />
       <Edges color="#94a3b8" lineWidth={1} />

@@ -25,7 +25,7 @@ export default function SimBox({ box, registerMeshRef }) {
   }, [fx, fy, fz])
 
   return (
-    <mesh ref={ref} castShadow receiveShadow>
+    <mesh ref={ref} visible={false} castShadow receiveShadow>
       <boxGeometry args={box.size} />
       {/* Match the brown storage cubes so a box picked from the pile looks
           like the same physical box being relocated to its build target. */}
