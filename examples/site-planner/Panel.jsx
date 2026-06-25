@@ -143,7 +143,7 @@ function JsonSection({ config, loadStatus, onReload }) {
 export default function Panel({
   gantries, arms, grids, zones, storageAreas,
   buildCubes, onRemoveBuildCube,
-  panels, onSelectPanel, onDeletePanel,
+  panels, panelSize, onChangePanelSize, onSelectPanel, onDeletePanel,
   gridSizeCm, onChangeGridSize,
   boxSizeCm, onChangeBoxSize,
   activeTool, setActiveTool,
@@ -429,18 +429,38 @@ export default function Panel({
         <ToolSection
           num="07"
           title="Panels"
-          hint="Click two points on the floor to draw a panel wall (1.5 m tall)."
-          activatingLabel="Click a start point, then an end point…"
+          hint="Select a size, then click a start and end point to lay panels."
+          activatingLabel="Click start point, then end point…"
           active={activeTool === 'panel'}
           onToggle={() => toggleTool('panel')}
-          addIcon="▬"
-          addTitle="Draw panel"
+          addIcon="+"
+          addTitle="Draw panel run"
           items={panels || []}
           selectedId={activeTool === 'panel' ? null : selectedId}
           onSelectItem={onSelectPanel}
           onDeleteItem={onDeletePanel}
-          renderLabel={(it, i) => `Panel ${i + 1}`}
-        />
+          renderLabel={(it, i) => {
+            const s = it.size || 2
+            const axis = it.axis || (Math.abs((it.x2||0) - (it.x1||0)) >= Math.abs((it.z2||0) - (it.z1||0)) ? 'x' : 'z')
+            const len = axis === 'x' ? Math.abs((it.x2||0) - (it.x1||0)) : Math.abs((it.z2||0) - (it.z1||0))
+            const count = Math.max(1, Math.round(len / s))
+            return `Panel ${i + 1} · ${s} m × ${count}`
+          }}
+        >
+          <div className="settings-row inline">
+            <span className="setting-label">Size</span>
+            <div className="segmented">
+              <button
+                className={`seg-btn${panelSize === 2 ? ' active' : ''}`}
+                onClick={() => onChangePanelSize(2)}
+              >2 m</button>
+              <button
+                className={`seg-btn${panelSize === 4 ? ' active' : ''}`}
+                onClick={() => onChangePanelSize(4)}
+              >4 m</button>
+            </div>
+          </div>
+        </ToolSection>
 
         <JsonSection config={config} loadStatus={loadStatus} onReload={onReload} />
       </div>

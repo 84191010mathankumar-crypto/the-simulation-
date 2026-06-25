@@ -29,6 +29,7 @@ function App() {
   const [storageAreas, setStorage]    = useState([])
   const [buildCubes, setBuildCubes]   = useState([])
   const [panels, setPanels]           = useState([])
+  const [panelSize, setPanelSize]     = useState(2)
   const [gridSizeCm, setGridSizeCm]   = useState(200)
   const [boxSizeCm, setBoxSizeCm]     = useState(60)
   const [activeTool, setActiveTool]   = useState(null)
@@ -500,7 +501,8 @@ function App() {
       <Panel
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onRemoveBuildCube={onRemoveBuildCube}
-        panels={panels} onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
+        panels={panels} panelSize={panelSize} onChangePanelSize={setPanelSize}
+        onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
         gridSizeCm={gridSizeCm} onChangeGridSize={setGridSizeCm}
         boxSizeCm={boxSizeCm} onChangeBoxSize={setBoxSizeCm}
         activeTool={activeTool} setActiveTool={setActiveTool}
@@ -524,7 +526,8 @@ function App() {
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onAddBuildCube={onAddBuildCube} onRemoveBuildCube={onRemoveBuildCube}
-        panels={panels} onCreatePanel={onCreatePanel} onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
+        panels={panels} panelSize={panelSize}
+        onCreatePanel={onCreatePanel} onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
         selectedId={selectedId}
         gridSizeCm={gridSizeCm}
         boxSizeCm={boxSizeCm}

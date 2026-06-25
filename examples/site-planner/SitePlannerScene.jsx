@@ -115,7 +115,7 @@ function Loading() {
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
-  panels, onCreatePanel, onSelectPanel, onDeletePanel,
+  panels, panelSize = 2, onCreatePanel, onSelectPanel, onDeletePanel,
   selectedId, showModel = true, modelOpacity = 1, gridSizeCm = 100, boxSizeCm = 60, isArmValid,
   simulating, simRobots, simBoxes, gantryInstances = [], activeGantryIds,
   consumedSourceKeys, schedulers = [], registerSimMeshRef,
@@ -277,12 +277,13 @@ export default function SitePlannerScene({
             />
           )}
 
-          {/* Panel walls — 1.5 m tall extruded lines drawn on the floor */}
+          {/* Panel walls — discrete 2 m or 4 m segments, 1.5 m tall */}
           <LineTool
             active={activeTool === 'panel'}
             items={panels || []}
             selectedId={activeTool === 'panel' ? null : selectedId}
             groundSize={groundSize}
+            panelSize={panelSize}
             selectable={!activeTool}
             onCreate={onCreatePanel}
             onSelect={onSelectPanel}
