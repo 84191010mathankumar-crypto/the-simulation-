@@ -163,26 +163,31 @@ export function createGantryScheduler({ boxes, onLog, store = useGantryStore, or
 
     const st = state.animState
     const { pose, carrying } = state
+    const isPanel = !!current.box.panelData
 
     if (carrying) {
-      // Gripper has the box by its top face — the box hangs below the
-      // fingertip, so its centre is one half-height down from `pose.y`.
-      // pose is in the gantry's local frame; shift it back into world space.
+      // Panels: only reveal once the gantry has risen clear of the storage pile
+      // (panels are 1.5 m tall; show above 2.5 m so no overlap with storage visual).
+      // Boxes: show immediately — they're small and rising from floor level.
+      mesh.visible = isPanel ? pose.y > 2.5 : true
       mesh.position.set(pose.x + ox, pose.y - current.halfH, pose.z + oz)
       mesh.rotation.set(0, pose.rotY, 0)
       return
     }
 
-    // Not yet grabbed → sit at the pickup pose.
+    // Not yet grabbed → sit at the pickup pose; hidden (StorageVisual covers it).
     // Already released → sit at the drop pose.
     const beforePick = st === 'moving_to_start' || st === 'descending_pick'
     if (beforePick) {
+      mesh.visible = false
       const [x, y, z] = current.currentWorld
       mesh.position.set(x, y, z)
       mesh.rotation.set(0, current.startRotY, 0)
       return
     }
 
+    // Released — panels: hide (LineTool shows wall). Boxes: keep visible (placed cube).
+    mesh.visible = !isPanel
     const [tx, ty, tz] = current.box.to
     mesh.position.set(tx, ty, tz)
     mesh.rotation.set(0, current.endRotY, 0)
