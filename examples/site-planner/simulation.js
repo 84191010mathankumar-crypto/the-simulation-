@@ -225,24 +225,24 @@ const PANEL_STACK_LAYERS = 4 // how many panels high each storage pile goes
  * Exported so PanelStorageVisual can use the exact same layout.
  */
 export function panelAreaSources(area) {
-  const { panelSize = 2 } = area
+  const { panelSize = 2, layers = PANEL_STACK_LAYERS } = area
   const w = area.maxX - area.minX
   const d = area.maxZ - area.minZ
   const cols = Math.max(1, Math.floor(w / panelSize))
-  const rows = Math.max(1, Math.floor(d / PANEL_HEIGHT))
+  // Panels stand vertically; each slot is PANEL_THICKNESS deep (with a small gap).
+  const slotD = PANEL_THICKNESS * 1.5
+  const rows  = Math.max(1, Math.min(layers, Math.floor(d / slotD)))
   const stepX = w / cols
   const stepZ = d / rows
   const out = []
-  // Top layers first so the pile depletes from the top down.
-  for (let h = PANEL_STACK_LAYERS - 1; h >= 0; h--) {
+  // Front row first so the pile depletes from the front.
+  for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        out.push([
-          area.minX + (c + 0.5) * stepX,
-          (h + 0.5) * PANEL_THICKNESS + 0.02,
-          area.minZ + (r + 0.5) * stepZ,
-        ])
-      }
+      out.push([
+        area.minX + (c + 0.5) * stepX,
+        PANEL_HEIGHT / 2,                 // standing upright — centre at half height
+        area.minZ + (r + 0.5) * stepZ,
+      ])
     }
   }
   return out
