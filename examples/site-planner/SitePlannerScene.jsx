@@ -11,6 +11,8 @@ import PointTool from './PointTool'
 import LineTool from './LineTool'
 import BuildResultTool from './BuildResultTool'
 import SimBox from './SimBox'
+import SimPanel from './SimPanel'
+import PanelStorageVisual from './PanelStorageVisual'
 import MobileArmRobot from '../warehouse/MobileArmRobot'
 import { GantryRobotVisual, GridAreaVisual, StorageVisual } from './RobotVisuals'
 
@@ -26,7 +28,7 @@ function SchedulerTick({ schedulers }) {
  * during simulation.  Arms and gantries each have their own store + scheduler,
  * so they execute in parallel; every box mesh is shared and driven by whichever
  * scheduler owns it. */
-function Simulation({ robots, gantryInstances, boxes, schedulers, registerMeshRef }) {
+function Simulation({ robots, gantryInstances, boxes, panelBoxes = [], schedulers, registerMeshRef }) {
   return (
     <Suspense fallback={null}>
       {robots.map((r, i) => (
@@ -44,6 +46,7 @@ function Simulation({ robots, gantryInstances, boxes, schedulers, registerMeshRe
         </GantryStoreProvider>
       ))}
       {boxes.map((b) => <SimBox key={b.id} box={b} registerMeshRef={registerMeshRef} />)}
+      {panelBoxes.map((b) => <SimPanel key={b.id} box={b} registerMeshRef={registerMeshRef} />)}
       <SchedulerTick schedulers={schedulers} />
     </Suspense>
   )
@@ -115,7 +118,10 @@ function Loading() {
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
-  panels, panelSize = 2, onCreatePanel, onSelectPanel, onDeletePanel,
+  panels, panelSize = 2, placedPanelSegments, onCreatePanel, onSelectPanel, onDeletePanel,
+  panelStorageAreas, consumedPanelSourceKeys,
+  onCreatePanelStorage, onSelectPanelStorage, onUpdatePanelStorage, onDeletePanelStorage,
+  simPanelBoxes = [],
   selectedId, showModel = true, modelOpacity = 1, gridSizeCm = 100, boxSizeCm = 60, isArmValid,
   simulating, simRobots, simBoxes, gantryInstances = [], activeGantryIds,
   consumedSourceKeys, schedulers = [], registerSimMeshRef,
@@ -259,6 +265,7 @@ export default function SitePlannerScene({
               robots={simRobots}
               gantryInstances={gantryInstances}
               boxes={simBoxes}
+              panelBoxes={simPanelBoxes}
               schedulers={schedulers}
               registerMeshRef={registerSimMeshRef}
             />
@@ -277,13 +284,39 @@ export default function SitePlannerScene({
             />
           )}
 
-          {/* Panel walls — discrete 2 m or 4 m segments, 1.5 m tall */}
+          {/* Panel storage — rectangles filled with lying-flat panels */}
+          <RectTool
+            active={activeTool === 'panelStorage'}
+            items={panelStorageAreas || []}
+            selectedId={activeTool === 'panelStorage' ? null : selectedId}
+            color="#0891b2"
+            opacity={0.22}
+            y={0.06}
+            groundSize={groundSize}
+            selectable={!activeTool}
+            outlineOnly
+            renderRobot={(rect) => (
+              <PanelStorageVisual
+                rect={rect}
+                panelSize={rect.panelSize || 2}
+                hiddenKeys={simulating ? consumedPanelSourceKeys : null}
+              />
+            )}
+            onCreate={onCreatePanelStorage}
+            onSelect={onSelectPanelStorage}
+            onUpdate={onUpdatePanelStorage}
+            onDelete={onDeletePanelStorage}
+            onDeselect={onDeselect}
+          />
+
+          {/* Panel target lines — floor outlines until robots place them */}
           <LineTool
             active={activeTool === 'panel'}
             items={panels || []}
             selectedId={activeTool === 'panel' ? null : selectedId}
             groundSize={groundSize}
             panelSize={panelSize}
+            placedSegmentIds={placedPanelSegments}
             selectable={!activeTool}
             onCreate={onCreatePanel}
             onSelect={onSelectPanel}

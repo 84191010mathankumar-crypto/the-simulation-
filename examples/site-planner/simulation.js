@@ -211,3 +211,127 @@ export function buildSimulation({ buildCubes, storageAreas, unit, gantries = [],
     assignment: { mode: robotMode, gantryBoxes, armBoxes, gantriesWithoutStorage },
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel simulation helpers
+// ─────────────────────────────────────────────────────────────────────────────
+const PANEL_HEIGHT   = 1.5   // wall height in metres
+const PANEL_THICKNESS = 0.1  // wall / panel thickness
+const PANEL_STACK_LAYERS = 4 // how many panels high each storage pile goes
+
+/**
+ * Returns all panel positions (lying flat) inside one panel storage area.
+ * Panels lie flat: [panelSize × PANEL_HEIGHT (1.5m)] footprint, PANEL_THICKNESS tall.
+ * Exported so PanelStorageVisual can use the exact same layout.
+ */
+export function panelAreaSources(area) {
+  const { panelSize = 2 } = area
+  const w = area.maxX - area.minX
+  const d = area.maxZ - area.minZ
+  const cols = Math.max(1, Math.floor(w / panelSize))
+  const rows = Math.max(1, Math.floor(d / PANEL_HEIGHT))
+  const stepX = w / cols
+  const stepZ = d / rows
+  const out = []
+  // Top layers first so the pile depletes from the top down.
+  for (let h = PANEL_STACK_LAYERS - 1; h >= 0; h--) {
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        out.push([
+          area.minX + (c + 0.5) * stepX,
+          (h + 0.5) * PANEL_THICKNESS + 0.02,
+          area.minZ + (r + 0.5) * stepZ,
+        ])
+      }
+    }
+  }
+  return out
+}
+
+/** Decompose one drawn panel run into individual segment centre positions. */
+function panelRunSegments(run) {
+  const { x1, z1, x2, z2, size = 2 } = run
+  const axis = run.axis || (Math.abs(x2 - x1) >= Math.abs(z2 - z1) ? 'x' : 'z')
+  if (axis === 'x') {
+    const count = Math.max(1, Math.round(Math.abs(x2 - x1) / size))
+    const dir   = x2 >= x1 ? 1 : -1
+    return Array.from({ length: count }, (_, i) => ({
+      cx: x1 + dir * (i + 0.5) * size, cz: z1, axis: 'x', size,
+    }))
+  } else {
+    const count = Math.max(1, Math.round(Math.abs(z2 - z1) / size))
+    const dir   = z2 >= z1 ? 1 : -1
+    return Array.from({ length: count }, (_, i) => ({
+      cx: x1, cz: z1 + dir * (i + 0.5) * size, axis: 'z', size,
+    }))
+  }
+}
+
+/**
+ * Build pick-and-place tasks for the panel system.
+ *
+ * `panels`           — drawn wall runs (targets).
+ * `panelStorageAreas`— rectangles filled with lying-flat panels (sources).
+ *
+ * Returns panelBoxes (scheduler tasks), needed, available, missing.
+ */
+export function buildPanelSimulation({ panels, panelStorageAreas }) {
+  // Decompose every panel run into individual segments.
+  const targets = []
+  for (const run of panels) {
+    const segs = panelRunSegments(run)
+    for (let i = 0; i < segs.length; i++) {
+      targets.push({ ...segs[i], runId: run.id, segIdx: i, id: `${run.id}-${i}` })
+    }
+  }
+
+  // Collect all source positions from storage areas.
+  const sources = []
+  for (const area of panelStorageAreas) {
+    const slots = panelAreaSources(area)
+    for (const pos of slots) sources.push({ pos, panelSize: area.panelSize || 2 })
+  }
+
+  const needed    = targets.length
+  const available = sources.length
+  const used      = new Array(sources.length).fill(false)
+  const panelBoxes = []
+
+  for (const tgt of targets) {
+    // Nearest unused source whose panelSize matches the target size.
+    let bestIdx = -1, bestDist = Infinity
+    for (let i = 0; i < sources.length; i++) {
+      if (used[i] || sources[i].panelSize !== tgt.size) continue
+      const dx = sources[i].pos[0] - tgt.cx
+      const dz = sources[i].pos[2] - tgt.cz
+      const d2 = dx * dx + dz * dz
+      if (d2 < bestDist) { bestDist = d2; bestIdx = i }
+    }
+    if (bestIdx < 0) break
+    used[bestIdx] = true
+
+    const { pos } = sources[bestIdx]
+    const w = tgt.axis === 'x' ? tgt.size : PANEL_THICKNESS
+    const d = tgt.axis === 'z' ? tgt.size : PANEL_THICKNESS
+
+    panelBoxes.push({
+      id: `simpanel-${tgt.id}`,
+      size: [w, PANEL_HEIGHT, d],
+      from: pos,
+      to:   [tgt.cx, PANEL_HEIGHT / 2, tgt.cz],
+      fromRotation: [0, 0, 0],
+      toRotation:   [0, 0, 0],
+      grab:     [0, 1, 0],
+      priority: 0,
+      robot: { type: 'arm' },
+      panelData: { runId: tgt.runId, segIdx: tgt.segIdx, axis: tgt.axis, size: tgt.size },
+    })
+  }
+
+  return {
+    panelBoxes,
+    needed,
+    available,
+    missing: Math.max(0, needed - panelBoxes.length),
+  }
+}

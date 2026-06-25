@@ -5,7 +5,7 @@ import Panel from './Panel'
 import SitePlannerScene from './SitePlannerScene'
 import { createScheduler } from '../warehouse/scheduler'
 import { createGantryScheduler } from '../warehouse/gantryScheduler'
-import { buildSimulation, sourceKey } from './simulation'
+import { buildSimulation, buildPanelSimulation, sourceKey } from './simulation'
 import '../warehouse/Panel.css'
 import './site-planner.css'
 
@@ -28,8 +28,11 @@ function App() {
   const [zones, setZones]             = useState([])
   const [storageAreas, setStorage]    = useState([])
   const [buildCubes, setBuildCubes]   = useState([])
-  const [panels, setPanels]           = useState([])
-  const [panelSize, setPanelSize]     = useState(2)
+  const [panels, setPanels]               = useState([])
+  const [panelSize, setPanelSize]         = useState(2)
+  const [panelStorageAreas, setPanelStorage] = useState([])
+  const [panelStorageSize, setPanelStorageSize] = useState(2)
+  const [placedPanelSegments, setPlacedPanelSegments] = useState(new Set())
   const [gridSizeCm, setGridSizeCm]   = useState(200)
   const [boxSizeCm, setBoxSizeCm]     = useState(60)
   const [activeTool, setActiveTool]   = useState(null)
@@ -42,7 +45,7 @@ function App() {
   const [robotType, setRobotType]     = useState('gantry') // 'arms' | 'gantry'
   const [simProgress, setSimProgress] = useState({ pending: 0, assigned: 0, done: 0 })
 
-  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1, panel: 1 })
+  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1, panel: 1, pstorage: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
 
   const loadConfig = useCallback(() => {
@@ -57,14 +60,16 @@ function App() {
         const z = data.restrictedZones || []
         const s = data.storageAreas   || []
         const b = data.buildCubes     || []
-        const p = data.panels         || []
-        g.forEach((it)  => bumpCounter(nextId, 'gantry',  it.id))
-        a.forEach((it)  => bumpCounter(nextId, 'arm',     it.id))
-        gr.forEach((it) => bumpCounter(nextId, 'grid',    it.id))
-        z.forEach((it)  => bumpCounter(nextId, 'zone',    it.id))
-        s.forEach((it)  => bumpCounter(nextId, 'storage', it.id))
-        b.forEach((it)  => bumpCounter(nextId, 'build',   it.id))
-        p.forEach((it)  => bumpCounter(nextId, 'panel',   it.id))
+        const p  = data.panels             || []
+        const ps = data.panelStorageAreas  || []
+        g.forEach((it)  => bumpCounter(nextId, 'gantry',   it.id))
+        a.forEach((it)  => bumpCounter(nextId, 'arm',      it.id))
+        gr.forEach((it) => bumpCounter(nextId, 'grid',     it.id))
+        z.forEach((it)  => bumpCounter(nextId, 'zone',     it.id))
+        s.forEach((it)  => bumpCounter(nextId, 'storage',  it.id))
+        b.forEach((it)  => bumpCounter(nextId, 'build',    it.id))
+        p.forEach((it)  => bumpCounter(nextId, 'panel',    it.id))
+        ps.forEach((it) => bumpCounter(nextId, 'pstorage', it.id))
         setGantries(g)
         setArms(a)
         setGrids(gr)
@@ -72,6 +77,7 @@ function App() {
         setStorage(s)
         setBuildCubes(b)
         setPanels(p)
+        setPanelStorage(ps)
         if (data.gridSizeCm) setGridSizeCm(data.gridSizeCm)
         if (data.boxSizeCm) setBoxSizeCm(data.boxSizeCm)
         setLoadStatus('loaded')
@@ -174,7 +180,7 @@ function App() {
     setSelectedId((cur) => (cur === id ? null : cur))
   }
 
-  // ── Panel walls ───────────────────────────────────────────────
+  // ── Panel walls (target lines) ─────────────────────────────────
   const onCreatePanel = (line) => {
     setPanels((p) => [...p, { id: makeId('panel'), ...line }])
     setActiveTool(null)
@@ -182,6 +188,19 @@ function App() {
   const onSelectPanel = (id) => setSelectedId((cur) => (cur === id ? null : id))
   const onDeletePanel = (id) => {
     setPanels((p) => p.filter((it) => it.id !== id))
+    setSelectedId((cur) => (cur === id ? null : cur))
+  }
+
+  // ── Panel storage areas ────────────────────────────────────────
+  const onCreatePanelStorage = (rect) => {
+    setPanelStorage((ps) => [...ps, { id: makeId('pstorage'), ...rect, panelSize: panelStorageSize }])
+    setActiveTool(null)
+  }
+  const onUpdatePanelStorage = (id, rect) =>
+    setPanelStorage((ps) => ps.map((it) => (it.id === id ? { ...it, ...rect } : it)))
+  const onSelectPanelStorage = (id) => setSelectedId((cur) => (cur === id ? null : id))
+  const onDeletePanelStorage = (id) => {
+    setPanelStorage((ps) => ps.filter((it) => it.id !== id))
     setSelectedId((cur) => (cur === id ? null : cur))
   }
 
@@ -325,6 +344,11 @@ function App() {
     [buildCubes, storageAreas, unit, gantries, robotType]
   )
 
+  const panelSim = useMemo(
+    () => buildPanelSimulation({ panels, panelStorageAreas }),
+    [panels, panelStorageAreas]
+  )
+
   // Give every robot a unique X travel lane so no two robots ever share the
   // same grid column during transit.  With 7 arms landing in only 3 snapped
   // columns (65.36, 67.36, 69.36), multiple robots get identical BFS paths
@@ -386,11 +410,28 @@ function App() {
     [sim.boxes]
   )
 
+  // Panel scene / scheduler objects.
+  const panelBoxesForScene = useMemo(
+    () => panelSim.panelBoxes.map((b) => ({ ...b })),
+    [panelSim.panelBoxes]
+  )
+  const panelBoxesForScheduler = useMemo(
+    () => panelSim.panelBoxes.map((b) => ({
+      ...b,
+      meshRef: { get current() { return simMeshRefs.current.get(b.id) } },
+    })),
+    [panelSim.panelBoxes]
+  )
+
   // Source positions consumed by the run, so <StorageVisual> can hide those
   // cubes — the pile depletes as the boxes are carried off.
   const consumedSourceKeys = useMemo(
     () => new Set(sim.boxes.map((b) => sourceKey(b.from))),
     [sim.boxes]
+  )
+  const consumedPanelSourceKeys = useMemo(
+    () => new Set(panelSim.panelBoxes.map((b) => sourceKey(b.from))),
+    [panelSim.panelBoxes]
   )
 
   const pushSimLog = useCallback(() => {}, [])
@@ -401,9 +442,14 @@ function App() {
     () => simBoxesForScheduler.filter((b) => !b.robot || b.robot.type === 'arm'),
     [simBoxesForScheduler]
   )
+  // Combine regular box tasks and panel tasks for the arm scheduler.
+  const allArmTasks = useMemo(
+    () => [...armBoxes, ...panelBoxesForScheduler],
+    [armBoxes, panelBoxesForScheduler]
+  )
   const armScheduler = useMemo(
-    () => createScheduler({ robots: simRobots, boxes: armBoxes, onLog: pushSimLog }),
-    [simRobots, armBoxes, pushSimLog]
+    () => createScheduler({ robots: simRobots, boxes: allArmTasks, onLog: pushSimLog }),
+    [simRobots, allArmTasks, pushSimLog]
   )
 
   // One animated gantry per gantry area that actually has boxes to place.
@@ -449,6 +495,7 @@ function App() {
     for (const s of allSchedulers) s.reset()
     setSimulating(false)
     setSimDone(false)
+    setPlacedPanelSegments(new Set())
     setSimProgress({ pending: sim.boxes.length, assigned: 0, done: 0 })
   }, [allSchedulers, sim.boxes.length])
 
@@ -472,9 +519,22 @@ function App() {
       }
       setSimProgress(counts)
       if (!anyRunning && total > 0 && counts.done === total) setSimDone(true)
+
+      // Track which panel segments have been delivered so LineTool can
+      // show them as solid walls.
+      const placed = new Set()
+      for (const task of armScheduler.tasks) {
+        if (task.state === 'done' && task.box?.panelData) {
+          placed.add(`${task.box.panelData.runId}-${task.box.panelData.segIdx}`)
+        }
+      }
+      setPlacedPanelSegments((prev) => {
+        if (prev.size === placed.size) return prev  // avoid re-render
+        return placed
+      })
     }, 200)
     return () => clearInterval(t)
-  }, [simulating, allSchedulers])
+  }, [simulating, allSchedulers, armScheduler])
 
   const config = useMemo(() => ({
     gridSizeCm,
@@ -493,16 +553,25 @@ function App() {
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
     buildCubes: buildCubes.map(({ id, x, z, layer }) => ({ id, x: round(x), z: round(z), layer })),
-    panels: panels.map(({ id, x1, z1, x2, z2 }) => ({ id, x1: round(x1), z1: round(z1), x2: round(x2), z2: round(z2) })),
-  }), [gridSizeCm, boxSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes, panels])
+    panels: panels.map(({ id, x1, z1, x2, z2, axis, size }) => ({
+      id, x1: round(x1), z1: round(z1), x2: round(x2), z2: round(z2), axis, size,
+    })),
+    panelStorageAreas: panelStorageAreas.map(({ id, minX, maxX, minZ, maxZ, panelSize }) => ({
+      id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ), panelSize,
+    })),
+  }), [gridSizeCm, boxSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes, panels, panelStorageAreas])
 
   return (
     <div className="planner-app">
       <Panel
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onRemoveBuildCube={onRemoveBuildCube}
+        panelStorageAreas={panelStorageAreas}
+        panelStorageSize={panelStorageSize} onChangePanelStorageSize={setPanelStorageSize}
+        onSelectPanelStorage={onSelectPanelStorage} onDeletePanelStorage={onDeletePanelStorage}
         panels={panels} panelSize={panelSize} onChangePanelSize={setPanelSize}
         onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
+        panelStats={panelSim}
         gridSizeCm={gridSizeCm} onChangeGridSize={setGridSizeCm}
         boxSizeCm={boxSizeCm} onChangeBoxSize={setBoxSizeCm}
         activeTool={activeTool} setActiveTool={setActiveTool}
@@ -526,8 +595,12 @@ function App() {
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onAddBuildCube={onAddBuildCube} onRemoveBuildCube={onRemoveBuildCube}
-        panels={panels} panelSize={panelSize}
+        panels={panels} panelSize={panelSize} placedPanelSegments={placedPanelSegments}
         onCreatePanel={onCreatePanel} onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
+        panelStorageAreas={panelStorageAreas} consumedPanelSourceKeys={consumedPanelSourceKeys}
+        onCreatePanelStorage={onCreatePanelStorage} onSelectPanelStorage={onSelectPanelStorage}
+        onUpdatePanelStorage={onUpdatePanelStorage} onDeletePanelStorage={onDeletePanelStorage}
+        simPanelBoxes={panelBoxesForScene}
         selectedId={selectedId}
         gridSizeCm={gridSizeCm}
         boxSizeCm={boxSizeCm}

@@ -122,7 +122,7 @@ function JsonSection({ config, loadStatus, onReload }) {
   return (
     <section className={`section${open ? ' sec-open' : ''}`}>
       <div className="section-head" onClick={() => setOpen((v) => !v)}>
-        <span className="sec-num">08</span>
+        <span className="sec-num">09</span>
         <span className="sec-title">Config JSON</span>
         <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
@@ -143,7 +143,10 @@ function JsonSection({ config, loadStatus, onReload }) {
 export default function Panel({
   gantries, arms, grids, zones, storageAreas,
   buildCubes, onRemoveBuildCube,
+  panelStorageAreas, panelStorageSize, onChangePanelStorageSize,
+  onSelectPanelStorage, onDeletePanelStorage,
   panels, panelSize, onChangePanelSize, onSelectPanel, onDeletePanel,
+  panelStats,
   gridSizeCm, onChangeGridSize,
   boxSizeCm, onChangeBoxSize,
   activeTool, setActiveTool,
@@ -428,8 +431,43 @@ export default function Panel({
 
         <ToolSection
           num="07"
+          title="Panel storage"
+          hint="Draw a rectangle to mark an area filled with lying-flat panels."
+          activatingLabel="Click two floor points to mark a storage area…"
+          active={activeTool === 'panelStorage'}
+          onToggle={() => toggleTool('panelStorage')}
+          addIcon="+"
+          addTitle="Add panel storage"
+          items={panelStorageAreas || []}
+          selectedId={activeTool === 'panelStorage' ? null : selectedId}
+          onSelectItem={onSelectPanelStorage}
+          onDeleteItem={onDeletePanelStorage}
+          renderLabel={(it, i) => `Panel store ${i + 1} · ${it.panelSize || 2} m panels`}
+        >
+          <div className="settings-row inline">
+            <span className="setting-label">Panel size</span>
+            <div className="segmented">
+              <button className={`seg-btn${panelStorageSize === 2 ? ' active' : ''}`}
+                onClick={() => onChangePanelStorageSize(2)}>2 m</button>
+              <button className={`seg-btn${panelStorageSize === 4 ? ' active' : ''}`}
+                onClick={() => onChangePanelStorageSize(4)}>4 m</button>
+            </div>
+          </div>
+          {panelStats && panelStats.missing > 0 && (
+            <div className="sim-warning">
+              <strong>⚠ {panelStats.missing} panel{panelStats.missing === 1 ? '' : 's'} short</strong>
+              <span>Add more panel storage to cover the missing panels.</span>
+            </div>
+          )}
+          {panelStats && panelStats.missing === 0 && panelStats.needed > 0 && (
+            <div className="sim-ok">✓ {panelStats.available} panels available · {panelStats.needed} needed</div>
+          )}
+        </ToolSection>
+
+        <ToolSection
+          num="08"
           title="Panels"
-          hint="Select a size, then click a start and end point to lay panels."
+          hint="Select a size, then click a start and end point to mark where panels go."
           activatingLabel="Click start point, then end point…"
           active={activeTool === 'panel'}
           onToggle={() => toggleTool('panel')}
@@ -450,14 +488,10 @@ export default function Panel({
           <div className="settings-row inline">
             <span className="setting-label">Size</span>
             <div className="segmented">
-              <button
-                className={`seg-btn${panelSize === 2 ? ' active' : ''}`}
-                onClick={() => onChangePanelSize(2)}
-              >2 m</button>
-              <button
-                className={`seg-btn${panelSize === 4 ? ' active' : ''}`}
-                onClick={() => onChangePanelSize(4)}
-              >4 m</button>
+              <button className={`seg-btn${panelSize === 2 ? ' active' : ''}`}
+                onClick={() => onChangePanelSize(2)}>2 m</button>
+              <button className={`seg-btn${panelSize === 4 ? ' active' : ''}`}
+                onClick={() => onChangePanelSize(4)}>4 m</button>
             </div>
           </div>
         </ToolSection>
@@ -466,7 +500,7 @@ export default function Panel({
       </div>
 
       <div className="colophon">
-        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage · {buildCubes.length} boxes · {(panels || []).length} panels</span>
+        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage · {buildCubes.length} boxes · {(panelStorageAreas || []).length} panel stores · {(panels || []).length} panel runs</span>
         <span className="kbd">⌘</span>
       </div>
     </aside>
