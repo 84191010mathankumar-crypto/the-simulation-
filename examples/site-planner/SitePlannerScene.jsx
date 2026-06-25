@@ -157,16 +157,19 @@ export default function SitePlannerScene({
         <span className="hud-kbd"><kbd>drag</kbd> orbit</span>
         <span className="hud-kbd"><kbd>scroll</kbd> zoom</span>
         <span className="hud-kbd"><kbd>shift</kbd> pan</span>
-        <span className="hud-orbit-toggle">
-          <span className="hud-label">Auto orbit</span>
-          <button
-            className={'orbit-switch' + (autoOrbit ? ' on' : '')}
-            onClick={() => setAutoOrbit(v => !v)}
-            aria-label="Toggle auto-orbit"
-          >
-            <span className="orbit-switch-thumb" />
-          </button>
-        </span>
+      </div>
+
+      <div className={`orbit-ctrl${autoOrbit ? ' active' : ''}`}>
+        <span className="orbit-ctrl-icon">↻</span>
+        <span className="orbit-ctrl-label">Auto Orbit</span>
+        <button
+          className={'orbit-switch' + (autoOrbit ? ' on' : '')}
+          onClick={() => setAutoOrbit(v => !v)}
+          aria-pressed={autoOrbit}
+          aria-label="Toggle auto-orbit"
+        >
+          <span className="orbit-switch-thumb" />
+        </button>
       </div>
       <Canvas
         camera={{ position: [20, 16, 20], fov: 45, near: 0.1, far: 2000 }}
@@ -358,7 +361,8 @@ export default function SitePlannerScene({
           enableDamping
           dampingFactor={0.08}
           autoRotate={autoOrbit}
-          autoRotateSpeed={1.0}
+          autoRotateSpeed={1.5}
+          enableZoom={true}
         />
 
         <GizmoHelper alignment="bottom-right" margin={[40, 40]}>
