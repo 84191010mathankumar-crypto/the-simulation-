@@ -21,10 +21,10 @@
   --red:         #e05c5c;
   --amber:       #d4a847;
 
-  --font-display: 'Instrument Serif', 'Georgia', serif;
-  --font:         'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-label:   'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', 'Fira Mono', ui-monospace, monospace;
+  --font-display: 'Futura', 'Century Gothic', 'Trebuchet MS', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font:         'Futura', 'Century Gothic', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-label:   'Futura', 'Century Gothic', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono:    'Futura', 'Century Gothic', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,7 +38,6 @@ html, body, #root {
   font-size: 12.5px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'ss01', 'ss02';
 }
 
 ::selection { background: var(--accent); color: #fff; }
