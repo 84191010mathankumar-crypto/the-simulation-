@@ -556,8 +556,9 @@ function App() {
     panels: panels.map(({ id, x1, z1, x2, z2, axis, size }) => ({
       id, x1: round(x1), z1: round(z1), x2: round(x2), z2: round(z2), axis, size,
     })),
-    panelStorageAreas: panelStorageAreas.map(({ id, minX, maxX, minZ, maxZ, panelSize }) => ({
+    panelStorageAreas: panelStorageAreas.map(({ id, minX, maxX, minZ, maxZ, panelSize, layers }) => ({
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ), panelSize,
+      ...(layers != null ? { layers } : {}),
     })),
   }), [gridSizeCm, boxSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes, panels, panelStorageAreas])
 

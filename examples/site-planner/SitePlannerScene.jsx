@@ -300,6 +300,8 @@ export default function SitePlannerScene({
                 rect={rect}
                 panelSize={rect.panelSize || 2}
                 hiddenKeys={simulating ? consumedPanelSourceKeys : null}
+                selected={rect.id === selectedId}
+                onUpdate={simulating ? null : (patch) => onUpdatePanelStorage(rect.id, patch)}
               />
             )}
             onCreate={onCreatePanelStorage}

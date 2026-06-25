@@ -2,207 +2,51 @@
   "gridSizeCm": 200,
   "boxSizeCm": 50,
   "gantryRobots": [
-    {
-      "id": "gantry-2",
-      "minX": -11.95,
-      "maxX": 18.03,
-      "minZ": -19.97,
-      "maxZ": -6.08
-    },
-    {
-      "id": "gantry-6",
-      "minX": -11.99,
-      "maxX": 18.02,
-      "minZ": -6.08,
-      "maxZ": 7.99
-    },
-    {
-      "id": "gantry-8",
-      "minX": 24,
-      "maxX": 35.99,
-      "minZ": -19.95,
-      "maxZ": -6
-    },
-    {
-      "id": "gantry-10",
-      "minX": 24.04,
-      "maxX": 35.97,
-      "minZ": -5.99,
-      "maxZ": 7.96
-    },
-    {
-      "id": "gantry-12",
-      "minX": 42.04,
-      "maxX": 72.03,
-      "minZ": -19.98,
-      "maxZ": -6.03
-    },
-    {
-      "id": "gantry-14",
-      "minX": 42.04,
-      "maxX": 72.02,
-      "minZ": -6,
-      "maxZ": 8.03
-    }
+    {"id":"gantry-2","minX":-11.95,"maxX":18.03,"minZ":-19.97,"maxZ":-6.08},
+    {"id":"gantry-6","minX":-11.99,"maxX":18.02,"minZ":-6.08,"maxZ":7.99},
+    {"id":"gantry-8","minX":24,"maxX":35.99,"minZ":-19.95,"maxZ":-6},
+    {"id":"gantry-10","minX":24.04,"maxX":35.97,"minZ":-5.99,"maxZ":7.96},
+    {"id":"gantry-12","minX":42.04,"maxX":72.03,"minZ":-19.98,"maxZ":-6.03},
+    {"id":"gantry-14","minX":42.04,"maxX":72.02,"minZ":-6,"maxZ":8.03}
   ],
   "roboArms": [
-    {
-      "id": "arm-1",
-      "x": -12,
-      "z": 8.5
-    },
-    {
-      "id": "arm-2",
-      "x": -2,
-      "z": 8.5
-    },
-    {
-      "id": "arm-3",
-      "x": 8,
-      "z": 8.5
-    },
-    {
-      "id": "arm-4",
-      "x": 18,
-      "z": 8.5
-    },
-    {
-      "id": "arm-5",
-      "x": 42,
-      "z": 8.5
-    },
-    {
-      "id": "arm-6",
-      "x": 52,
-      "z": 8.5
-    },
-    {
-      "id": "arm-7",
-      "x": 62,
-      "z": 8.5
-    },
-    {
-      "id": "arm-8",
-      "x": 72,
-      "z": 8.5
-    }
+    {"id":"arm-1","x":-12,"z":8.5},
+    {"id":"arm-2","x":-2,"z":8.5},
+    {"id":"arm-3","x":8,"z":8.5},
+    {"id":"arm-4","x":18,"z":8.5},
+    {"id":"arm-5","x":42,"z":8.5},
+    {"id":"arm-6","x":52,"z":8.5},
+    {"id":"arm-7","x":62,"z":8.5},
+    {"id":"arm-8","x":72,"z":8.5}
   ],
   "grids": [
-    {
-      "id": "grid-1",
-      "minX": -12,
-      "maxX": 72,
-      "minZ": -20,
-      "maxZ": 8
-    }
+    {"id":"grid-1","minX":-12,"maxX":72,"minZ":-20,"maxZ":8}
   ],
   "restrictedZones": [],
   "storageAreas": [
-    {
-      "id": "storage-17",
-      "minX": 24.07,
-      "maxX": 25.98,
-      "minZ": -6.03,
-      "maxZ": -3.99
-    },
-    {
-      "id": "storage-19",
-      "minX": 33.98,
-      "maxX": 35.95,
-      "minZ": -6.03,
-      "maxZ": -4.05
-    },
-    {
-      "id": "storage-21",
-      "minX": 24,
-      "maxX": 25.97,
-      "minZ": 5.94,
-      "maxZ": 7.95
-    },
-    {
-      "id": "storage-23",
-      "minX": 34,
-      "maxX": 35.97,
-      "minZ": 5.96,
-      "maxZ": 7.91
-    },
-    {
-      "id": "storage-25",
-      "minX": 42.08,
-      "maxX": 43.96,
-      "minZ": -6.03,
-      "maxZ": -4.06
-    },
-    {
-      "id": "storage-27",
-      "minX": 42.04,
-      "maxX": 44.01,
-      "minZ": 5.98,
-      "maxZ": 7.96
-    },
-    {
-      "id": "storage-29",
-      "minX": 70.01,
-      "maxX": 71.98,
-      "minZ": 5.99,
-      "maxZ": 7.94
-    },
-    {
-      "id": "storage-31",
-      "minX": 67.99,
-      "maxX": 69.99,
-      "minZ": 5.96,
-      "maxZ": 7.96
-    },
-    {
-      "id": "storage-33",
-      "minX": 69.96,
-      "maxX": 72.02,
-      "minZ": 4.02,
-      "maxZ": 5.99
-    },
-    {
-      "id": "storage-35",
-      "minX": 16.05,
-      "maxX": 18.07,
-      "minZ": 6.03,
-      "maxZ": 8.01
-    },
-    {
-      "id": "storage-37",
-      "minX": 16.03,
-      "maxX": 18.1,
-      "minZ": -6.06,
-      "maxZ": -3.99
-    },
-    {
-      "id": "storage-39",
-      "minX": -9.99,
-      "maxX": -7.96,
-      "minZ": 6,
-      "maxZ": 8.02
-    },
-    {
-      "id": "storage-43",
-      "minX": -11.97,
-      "maxX": -9.98,
-      "minZ": 6,
-      "maxZ": 8.03
-    },
-    {
-      "id": "storage-45",
-      "minX": -11.95,
-      "maxX": -9.98,
-      "minZ": 4.01,
-      "maxZ": 6.01
-    },
-    {
-      "id": "storage-47",
-      "minX": 24.04,
-      "maxX": 36.02,
-      "minZ": 7.97,
-      "maxZ": 10.28
-    }
+    {"id":"storage-17","minX":24.07,"maxX":25.98,"minZ":-6.03,"maxZ":-3.99},
+    {"id":"storage-19","minX":33.98,"maxX":35.95,"minZ":-6.03,"maxZ":-4.05},
+    {"id":"storage-21","minX":24,"maxX":25.97,"minZ":5.94,"maxZ":7.95},
+    {"id":"storage-23","minX":34,"maxX":35.97,"minZ":5.96,"maxZ":7.91},
+    {"id":"storage-25","minX":42.08,"maxX":43.96,"minZ":-6.03,"maxZ":-4.06},
+    {"id":"storage-27","minX":42.04,"maxX":44.01,"minZ":5.98,"maxZ":7.96},
+    {"id":"storage-29","minX":70.01,"maxX":71.98,"minZ":5.99,"maxZ":7.94},
+    {"id":"storage-31","minX":67.99,"maxX":69.99,"minZ":5.96,"maxZ":7.96},
+    {"id":"storage-33","minX":69.96,"maxX":72.02,"minZ":4.02,"maxZ":5.99},
+    {"id":"storage-35","minX":16.05,"maxX":18.07,"minZ":6.03,"maxZ":8.01},
+    {"id":"storage-37","minX":16.03,"maxX":18.1,"minZ":-6.06,"maxZ":-3.99},
+    {"id":"storage-39","minX":-9.99,"maxX":-7.96,"minZ":6,"maxZ":8.02},
+    {"id":"storage-43","minX":-11.97,"maxX":-9.98,"minZ":6,"maxZ":8.03},
+    {"id":"storage-45","minX":-11.95,"maxX":-9.98,"minZ":4.01,"maxZ":6.01},
+    {"id":"storage-54","minX":15.96,"maxX":18.01,"minZ":-7.98,"maxZ":-6.01},
+    {"id":"storage-56","minX":15.97,"maxX":17.99,"minZ":-20.02,"maxZ":-18.01},
+    {"id":"storage-58","minX":-11.9,"maxX":-9.88,"minZ":-20.05,"maxZ":-18.01},
+    {"id":"storage-60","minX":-11.94,"maxX":-9.96,"minZ":-7.97,"maxZ":-5.99},
+    {"id":"storage-62","minX":42.07,"maxX":43.96,"minZ":-7.97,"maxZ":-5.93},
+    {"id":"storage-64","minX":42,"maxX":43.95,"minZ":-19.95,"maxZ":-17.98},
+    {"id":"storage-66","minX":69.97,"maxX":72.05,"minZ":-8.02,"maxZ":-5.87},
+    {"id":"storage-68","minX":69.96,"maxX":71.97,"minZ":-19.96,"maxZ":-18},
+    {"id":"storage-70","minX":23.99,"maxX":35.99,"minZ":8.01,"maxZ":8.81}
   ],
   "buildCubes": [
     {"id":"build-187","x":65.75,"z":4.25,"layer":0},
