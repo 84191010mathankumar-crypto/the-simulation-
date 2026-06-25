@@ -12,7 +12,7 @@ const PANEL_HEIGHT    = 1.5
 const PANEL_THICKNESS = 0.1
 const _dummy = new THREE.Object3D()
 
-export default function PanelStorageVisual({ rect, panelSize = 2, hiddenKeys = null, onUpdate }) {
+export default function PanelStorageVisual({ rect, panelSize = 2, hiddenKeys = null, onUpdate, selected = false }) {
   const positions = useMemo(
     () => panelAreaSources({ ...rect, panelSize }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,13 +54,13 @@ export default function PanelStorageVisual({ rect, panelSize = 2, hiddenKeys = n
 
   return (
     <group>
-      <instancedMesh ref={meshRef} args={[null, null, positions.length]} castShadow>
+      <instancedMesh ref={meshRef} args={[null, null, positions.length]} castShadow frustumCulled={false}>
         <boxGeometry args={[pw, ph, pd]} />
         <meshStandardMaterial color="#0891b2" metalness={0.08} roughness={0.65} />
       </instancedMesh>
 
-      {/* "+" button — only when not simulating (onUpdate is present) */}
-      {onUpdate && (
+      {/* "+" button — only when this storage area is selected and not simulating */}
+      {onUpdate && selected && (
         <Html center position={[cx, PANEL_HEIGHT + 0.5, cz]} zIndexRange={[100, 0]}
           style={{ pointerEvents: 'all' }}>
           <button
