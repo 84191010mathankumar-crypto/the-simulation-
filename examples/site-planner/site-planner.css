@@ -548,3 +548,8 @@
   color: var(--ink);
   box-shadow: 0 1px 0 var(--rule);
 }
+
+/* ── Planner scene: white authoring canvas ──────────────────── */
+.planner-app .scene-wrap {
+  background: #ffffff;
+}
