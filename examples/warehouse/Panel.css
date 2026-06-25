@@ -2,27 +2,29 @@
    Warehouse — cool architectural light theme, compact
    ───────────────────────────────────────────────────────────── */
 :root {
-  --paper:       #eaeef1;
-  --paper-deep:  #dde3e8;
-  --panel:       #f4f7f9;
-  --surface:     #ffffff;
-  --rule:        #c8d0d7;
-  --rule-soft:   #dde3e8;
-  --rule-hard:   #0e1620;
-  --ink:         #0e1620;
-  --ink-2:       #2b3744;
-  --ink-3:       #6b7783;
-  --ink-4:       #a3acb5;
-  --accent:      #117a78;
-  --accent-deep: #0a5654;
-  --steel:       #4a6273;
-  --green:       #4f7a5b;
-  --red:         #b94a3a;
-  --amber:       #b07a1a;
+  --paper:       #070d0b;
+  --paper-deep:  #050908;
+  --panel:       #0c1511;
+  --surface:     #121e18;
+  --rule:        rgba(255, 255, 255, 0.07);
+  --rule-soft:   rgba(255, 255, 255, 0.04);
+  --rule-hard:   rgba(255, 255, 255, 0.13);
+  --ink:         #d4ece1;
+  --ink-2:       #93b8a4;
+  --ink-3:       #4d6b5a;
+  --ink-4:       #273d31;
+  --accent:      #5ed29c;
+  --accent-deep: #3aac78;
+  --accent-soft: rgba(94, 210, 156, 0.10);
+  --steel:       #4a8c7a;
+  --green:       #5ed29c;
+  --red:         #e05c5c;
+  --amber:       #d4a847;
 
-  --font-display: 'Fraunces', 'Iowan Old Style', 'Georgia', serif;
-  --font:         'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', 'Fira Mono', ui-monospace, monospace;
+  --font-display: 'Futura', 'Century Gothic', 'Trebuchet MS', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font:         'Futura', 'Century Gothic', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-label:   'Futura', 'Century Gothic', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono:    'Futura', 'Century Gothic', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,7 +38,6 @@ html, body, #root {
   font-size: 12.5px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'ss01', 'ss02';
 }
 
 ::selection { background: var(--accent); color: #fff; }
@@ -93,9 +94,9 @@ button { font-family: inherit; }
 .pn-tab:hover:not(.active) { color: var(--ink); }
 .pn-tab:hover:not(.active) svg { opacity: 1; }
 .pn-tab.active {
-  background: var(--ink);
-  color: #fff;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+  background: var(--accent);
+  color: #070d0b;
+  box-shadow: 0 0 10px rgba(94, 210, 156, 0.25), inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .pn-tab.active svg { opacity: 1; }
 
@@ -166,12 +167,12 @@ button { font-family: inherit; }
   margin-bottom: 8px;
 }
 .warehouse-panel .brand-mark {
-  font-family: var(--font);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--ink);
-  text-transform: lowercase;
+  text-transform: uppercase;
 }
 .warehouse-panel .brand-mark::first-letter { color: var(--accent); }
 .warehouse-panel .edition {
@@ -271,9 +272,10 @@ button { font-family: inherit; }
 }
 .seg-btn:hover:not(:disabled):not(.active) { color: var(--ink); }
 .seg-btn.active {
-  background: var(--ink);
-  color: #fff;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.15);
+  background: var(--accent);
+  color: #070d0b;
+  box-shadow: 0 0 8px rgba(94, 210, 156, 0.2);
+  font-weight: 600;
 }
 .seg-btn.active::after { display: none; }
 .seg-btn:disabled { cursor: not-allowed; opacity: 0.5; }
@@ -461,20 +463,22 @@ input[type=range]::-moz-range-thumb {
   transition: all 0.18s ease;
 }
 .btn-primary {
-  background: var(--ink);
-  color: #fff;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+  background: var(--accent);
+  color: #070d0b;
+  font-weight: 700;
+  box-shadow: 0 0 14px rgba(94, 210, 156, 0.2), inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .btn-primary:not(:disabled):hover {
-  background: #000;
+  background: var(--accent-deep);
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px -8px rgba(14,22,32,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
+  box-shadow: 0 8px 24px -6px rgba(94, 210, 156, 0.35);
 }
 .btn-primary:not(:disabled):hover .arrow { transform: translateX(3px); }
 .btn-primary:disabled {
-  background: var(--paper-deep);
+  background: rgba(94, 210, 156, 0.08);
   color: var(--ink-4);
   cursor: not-allowed;
+  box-shadow: none;
 }
 .btn-primary.running {
   background: var(--accent);
@@ -494,15 +498,15 @@ input[type=range]::-moz-range-thumb {
 .btn-secondary {
   background: transparent;
   color: var(--ink-2);
-  border-color: var(--rule);
+  border-color: rgba(255, 255, 255, 0.1);
   flex: 0 0 auto;
   padding: 8px 14px;
   justify-content: center;
 }
 .btn-secondary:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-  background: var(--paper-deep);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 /* Task ledger */
@@ -606,7 +610,8 @@ input[type=range]::-moz-range-thumb {
   height: 100%;
   width: 100%;
   background:
-    radial-gradient(ellipse 80% 70% at 50% -20%, #ffffff 0%, #eef2f5 45%, #d9e0e6 100%);
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(94,210,156,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, #0a1410 0%, #070d0b 100%);
 }
 .scene-wrap::before {
   content: '';
