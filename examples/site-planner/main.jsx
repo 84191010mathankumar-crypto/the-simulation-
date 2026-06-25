@@ -28,6 +28,7 @@ function App() {
   const [zones, setZones]             = useState([])
   const [storageAreas, setStorage]    = useState([])
   const [buildCubes, setBuildCubes]   = useState([])
+  const [panels, setPanels]           = useState([])
   const [gridSizeCm, setGridSizeCm]   = useState(200)
   const [boxSizeCm, setBoxSizeCm]     = useState(60)
   const [activeTool, setActiveTool]   = useState(null)
@@ -40,7 +41,7 @@ function App() {
   const [robotType, setRobotType]     = useState('gantry') // 'arms' | 'gantry'
   const [simProgress, setSimProgress] = useState({ pending: 0, assigned: 0, done: 0 })
 
-  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1 })
+  const nextId = useRef({ gantry: 1, arm: 1, grid: 1, zone: 1, storage: 1, build: 1, panel: 1 })
   const makeId = (type) => `${type}-${nextId.current[type]++}`
 
   const loadConfig = useCallback(() => {
@@ -55,18 +56,21 @@ function App() {
         const z = data.restrictedZones || []
         const s = data.storageAreas   || []
         const b = data.buildCubes     || []
+        const p = data.panels         || []
         g.forEach((it)  => bumpCounter(nextId, 'gantry',  it.id))
         a.forEach((it)  => bumpCounter(nextId, 'arm',     it.id))
         gr.forEach((it) => bumpCounter(nextId, 'grid',    it.id))
         z.forEach((it)  => bumpCounter(nextId, 'zone',    it.id))
         s.forEach((it)  => bumpCounter(nextId, 'storage', it.id))
         b.forEach((it)  => bumpCounter(nextId, 'build',   it.id))
+        p.forEach((it)  => bumpCounter(nextId, 'panel',   it.id))
         setGantries(g)
         setArms(a)
         setGrids(gr)
         setZones(z)
         setStorage(s)
         setBuildCubes(b)
+        setPanels(p)
         if (data.gridSizeCm) setGridSizeCm(data.gridSizeCm)
         if (data.boxSizeCm) setBoxSizeCm(data.boxSizeCm)
         setLoadStatus('loaded')
@@ -166,6 +170,17 @@ function App() {
   const onSelectZone = (id) => setSelectedId((cur) => (cur === id ? null : id))
   const onDeleteZone = (id) => {
     setZones((z) => z.filter((it) => it.id !== id))
+    setSelectedId((cur) => (cur === id ? null : cur))
+  }
+
+  // ── Panel walls ───────────────────────────────────────────────
+  const onCreatePanel = (line) => {
+    setPanels((p) => [...p, { id: makeId('panel'), ...line }])
+    setActiveTool(null)
+  }
+  const onSelectPanel = (id) => setSelectedId((cur) => (cur === id ? null : id))
+  const onDeletePanel = (id) => {
+    setPanels((p) => p.filter((it) => it.id !== id))
     setSelectedId((cur) => (cur === id ? null : cur))
   }
 
@@ -477,13 +492,15 @@ function App() {
       id, minX: round(minX), maxX: round(maxX), minZ: round(minZ), maxZ: round(maxZ),
     })),
     buildCubes: buildCubes.map(({ id, x, z, layer }) => ({ id, x: round(x), z: round(z), layer })),
-  }), [gridSizeCm, boxSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes])
+    panels: panels.map(({ id, x1, z1, x2, z2 }) => ({ id, x1: round(x1), z1: round(z1), x2: round(x2), z2: round(z2) })),
+  }), [gridSizeCm, boxSizeCm, gantries, arms, grids, zones, storageAreas, buildCubes, panels])
 
   return (
     <div className="planner-app">
       <Panel
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onRemoveBuildCube={onRemoveBuildCube}
+        panels={panels} onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
         gridSizeCm={gridSizeCm} onChangeGridSize={setGridSizeCm}
         boxSizeCm={boxSizeCm} onChangeBoxSize={setBoxSizeCm}
         activeTool={activeTool} setActiveTool={setActiveTool}
@@ -507,6 +524,7 @@ function App() {
         activeTool={activeTool}
         gantries={gantries} arms={arms} grids={grids} zones={zones} storageAreas={storageAreas}
         buildCubes={buildCubes} onAddBuildCube={onAddBuildCube} onRemoveBuildCube={onRemoveBuildCube}
+        panels={panels} onCreatePanel={onCreatePanel} onSelectPanel={onSelectPanel} onDeletePanel={onDeletePanel}
         selectedId={selectedId}
         gridSizeCm={gridSizeCm}
         boxSizeCm={boxSizeCm}

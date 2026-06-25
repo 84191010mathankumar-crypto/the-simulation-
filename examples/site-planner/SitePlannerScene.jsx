@@ -8,6 +8,7 @@ import {
 } from 'robo-playground'
 import RectTool from './RectTool'
 import PointTool from './PointTool'
+import LineTool from './LineTool'
 import BuildResultTool from './BuildResultTool'
 import SimBox from './SimBox'
 import MobileArmRobot from '../warehouse/MobileArmRobot'
@@ -114,6 +115,7 @@ function Loading() {
 export default function SitePlannerScene({
   activeTool, gantries, arms, grids, zones, storageAreas,
   buildCubes, onAddBuildCube, onRemoveBuildCube,
+  panels, onCreatePanel, onSelectPanel, onDeletePanel,
   selectedId, showModel = true, modelOpacity = 1, gridSizeCm = 100, boxSizeCm = 60, isArmValid,
   simulating, simRobots, simBoxes, gantryInstances = [], activeGantryIds,
   consumedSourceKeys, schedulers = [], registerSimMeshRef,
@@ -274,6 +276,19 @@ export default function SitePlannerScene({
               onDeselect={onDeselect}
             />
           )}
+
+          {/* Panel walls — 1.5 m tall extruded lines drawn on the floor */}
+          <LineTool
+            active={activeTool === 'panel'}
+            items={panels || []}
+            selectedId={activeTool === 'panel' ? null : selectedId}
+            groundSize={groundSize}
+            selectable={!activeTool}
+            onCreate={onCreatePanel}
+            onSelect={onSelectPanel}
+            onDelete={onDeletePanel}
+            onDeselect={onDeselect}
+          />
 
           {/* Build result — transparent box stack visualization (the target
               pattern).  Edit buttons are disabled while simulating. */}

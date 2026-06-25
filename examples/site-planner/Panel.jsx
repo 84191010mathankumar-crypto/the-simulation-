@@ -122,7 +122,7 @@ function JsonSection({ config, loadStatus, onReload }) {
   return (
     <section className={`section${open ? ' sec-open' : ''}`}>
       <div className="section-head" onClick={() => setOpen((v) => !v)}>
-        <span className="sec-num">07</span>
+        <span className="sec-num">08</span>
         <span className="sec-title">Config JSON</span>
         <span className="sec-chevron" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </div>
@@ -143,6 +143,7 @@ function JsonSection({ config, loadStatus, onReload }) {
 export default function Panel({
   gantries, arms, grids, zones, storageAreas,
   buildCubes, onRemoveBuildCube,
+  panels, onSelectPanel, onDeletePanel,
   gridSizeCm, onChangeGridSize,
   boxSizeCm, onChangeBoxSize,
   activeTool, setActiveTool,
@@ -425,11 +426,27 @@ export default function Panel({
           renderLabel={(it, i) => `Box ${i + 1} · layer ${it.layer + 1}`}
         />
 
+        <ToolSection
+          num="07"
+          title="Panels"
+          hint="Click two points on the floor to draw a panel wall (1.5 m tall)."
+          activatingLabel="Click a start point, then an end point…"
+          active={activeTool === 'panel'}
+          onToggle={() => toggleTool('panel')}
+          addIcon="▬"
+          addTitle="Draw panel"
+          items={panels || []}
+          selectedId={activeTool === 'panel' ? null : selectedId}
+          onSelectItem={onSelectPanel}
+          onDeleteItem={onDeletePanel}
+          renderLabel={(it, i) => `Panel ${i + 1}`}
+        />
+
         <JsonSection config={config} loadStatus={loadStatus} onReload={onReload} />
       </div>
 
       <div className="colophon">
-        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage · {buildCubes.length} boxes</span>
+        <span>{gantries.length} gantries · {arms.length} arms · {grids.length} grids · {zones.length} zones · {storageAreas.length} storage · {buildCubes.length} boxes · {(panels || []).length} panels</span>
         <span className="kbd">⌘</span>
       </div>
     </aside>
