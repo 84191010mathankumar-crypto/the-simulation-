@@ -553,3 +553,42 @@
 .planner-app .scene-wrap {
   background: #ffffff;
 }
+
+/* ── Auto-orbit toggle ───────────────────────────────────────── */
+.hud-orbit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule);
+}
+.orbit-switch {
+  position: relative;
+  display: inline-flex;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--ink-4);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.orbit-switch.on {
+  background: var(--accent);
+}
+.orbit-switch-thumb {
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+.orbit-switch.on .orbit-switch-thumb {
+  transform: translateX(13px);
+}
