@@ -84,14 +84,25 @@ function SiteModel({ onBoundsReady, opacity = 1 }) {
   }, [scene, onBoundsReady])
 
   useEffect(() => {
+    // Google Earth–style building palette: warm off-white / cream / light tan
+    const BUILDING_COLORS = {
+      'Plaster':    '#ede8df',
+      'Plaster (2)':'#d8d2c8',
+      'Plaster (1)':'#e4ddd3',
+    }
     scene.traverse((obj) => {
       if (!obj.isMesh || !obj.material) return
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
       mats.forEach((m) => {
-        // Only the flat satellite map material — leave buildings untouched
         if (m.name === 'kulture site (1)') {
           m.transparent = opacity < 1
           m.opacity = opacity
+          m.needsUpdate = true
+        } else if (BUILDING_COLORS[m.name]) {
+          m.color.set(BUILDING_COLORS[m.name])
+          m.roughness = 0.82
+          m.metalness = 0
+          m.emissiveIntensity = 0
           m.needsUpdate = true
         }
       })
