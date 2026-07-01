@@ -84,28 +84,38 @@ function SiteModel({ onBoundsReady, opacity = 1 }) {
   }, [scene, onBoundsReady])
 
   useEffect(() => {
-    // Google Earth–style building palette: warm off-white / cream / light tan
+    // Google Earth–style palette — replace the KHR-extension MeshPhysicalMaterials
+    // entirely with clean MeshStandardMaterial so the color is guaranteed to apply.
     const BUILDING_COLORS = {
       'Plaster':    '#ede8df',
       'Plaster (2)':'#d8d2c8',
       'Plaster (1)':'#e4ddd3',
     }
+    const replaceMat = (m) => {
+      if (!m) return m
+      if (m.name === 'kulture site (1)') {
+        m.transparent = opacity < 1
+        m.opacity = opacity
+        m.needsUpdate = true
+        return m
+      }
+      if (m.name in BUILDING_COLORS && m.type !== 'MeshStandardMaterial') {
+        return new THREE.MeshStandardMaterial({
+          name: m.name,
+          color: new THREE.Color(BUILDING_COLORS[m.name]),
+          roughness: 0.82,
+          metalness: 0,
+        })
+      }
+      return m
+    }
     scene.traverse((obj) => {
-      if (!obj.isMesh || !obj.material) return
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
-      mats.forEach((m) => {
-        if (m.name === 'kulture site (1)') {
-          m.transparent = opacity < 1
-          m.opacity = opacity
-          m.needsUpdate = true
-        } else if (BUILDING_COLORS[m.name]) {
-          m.color.set(BUILDING_COLORS[m.name])
-          m.roughness = 0.82
-          m.metalness = 0
-          m.emissiveIntensity = 0
-          m.needsUpdate = true
-        }
-      })
+      if (!obj.isMesh) return
+      if (Array.isArray(obj.material)) {
+        obj.material = obj.material.map(replaceMat)
+      } else {
+        obj.material = replaceMat(obj.material)
+      }
     })
   }, [scene, opacity])
 
